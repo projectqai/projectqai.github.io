@@ -9,22 +9,79 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ### 1. Download and Run Hydra
 
-Download the latest release from [GitHub](https://github.com/projectqai/hydra/releases) and start the server:
+<Tabs items={['macOS', 'Windows', 'Raspberry Pi', 'Android', 'Docker']}>
+  <Tab value="macOS">
+    Download the [macOS binary](https://github.com/projectqai/hydra/releases/latest/) and run:
 
-```bash
-./hydra
-```
+    ```bash
+    chmod +x hydra
+    ./hydra
+    ```
 
-Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+    If macOS blocks the unsigned binary, remove the quarantine attribute:
+
+    ```bash
+    xattr -d com.apple.quarantine hydra
+    ```
+
+    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+  </Tab>
+  <Tab value="Windows">
+    Download the [Windows executable](https://github.com/projectqai/hydra/releases/latest/) and run:
+
+    ```bash
+    ./hydra.exe
+    ```
+
+    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+  </Tab>
+  <Tab value="Raspberry Pi">
+    Download the [ARM Linux binary](https://github.com/projectqai/hydra/releases/latest/):
+
+    ```bash
+    chmod +x hydra
+    ./hydra
+    ```
+
+    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+  </Tab>
+  <Tab value="Android">
+    Download the [APK](https://github.com/projectqai/hydra/releases/latest/) and install on your device.
+
+    **Sideloading with ADB:**
+
+    1. Enable Developer Options on your Android device:
+       - Go to Settings → About Phone
+       - Tap "Build Number" 7 times
+
+    2. Enable USB Debugging:
+       - Go to Settings → Developer Options
+       - Enable "USB Debugging"
+
+    3. Connect your device and install:
+       ```bash
+       adb install -r hydra.apk
+       ```
+  </Tab>
+  <Tab value="Docker">
+    Run Hydra using Docker:
+
+    ```bash
+    docker run -p 50051:50051 -ti ghcr.io/projectqai/hydra:v0.0.14
+    ```
+
+    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+  </Tab>
+</Tabs>
 
 ### 2. Connect Your First Client
 
-Install the gRPC client libraries for your language:
+Install the client libraries for your language:
 
 <Tabs items={['TypeScript', 'Python', 'Go']}>
   <Tab value="TypeScript">
     ```bash
-    npm install @grpc/grpc-js @protobuf-ts/grpc-transport
+    npm install @projectqai/proto @bufbuild/protobuf @connectrpc/connect @connectrpc/connect-web
     ```
   </Tab>
   <Tab value="Python">
@@ -45,17 +102,33 @@ Install the gRPC client libraries for your language:
 <Tabs items={['TypeScript', 'Python', 'Go']}>
   <Tab value="TypeScript">
     ```typescript
-    const entity = {
-      id: 'sensor-1',
+    import { EntitySchema, WorldService } from "@projectqai/proto/world";
+    import { create } from "@bufbuild/protobuf";
+    import { createClient } from "@connectrpc/connect";
+    import { createConnectTransport } from "@connectrpc/connect-web";
+
+    // Create an entity
+    const entity = create(EntitySchema, {
+      id: "sensor-1",
       geo: {
         latitude: 52.52,
         longitude: 13.40,
         altitude: 100
       },
       symbol: {
-        milStd2525C: 'SFGPES----'
+        milStd2525C: "SFGPES----"
       }
-    };
+    });
+
+    // Connect to Hydra and push the entity
+    const transport = createConnectTransport({
+      baseUrl: "http://localhost:50051"
+    });
+    const client = createClient(WorldService, transport);
+
+    const response = await client.push({
+      changes: [entity]
+    });
     ```
   </Tab>
   <Tab value="Python">
