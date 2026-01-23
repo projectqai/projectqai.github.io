@@ -58,19 +58,19 @@ lifetime: {
 Controls Quality of Service for bandwidth-constrained networks (DDIL scenarios).
 
 **Values:**
-- `PriorityLow (1)` - Send when bandwidth available, tolerate loss
-- `PriorityHigh (2)` - Send before low, respect bandwidth limits
-- `PriorityBurst (3)` - Ignore limits, send immediately (mission critical only)
+- `PriorityRoutine (1)` - Normal day-to-day traffic. May be delayed or coalesced when bandwidth is constrained
+- `PriorityImmediate (2)` - Delay would negatively affect the mission. Sent before lower precedence messages
+- `PriorityFlash (3)` - Extreme urgency. Sent without respecting bandwidth limits. Misuse can jeopardize missions
 
 **Example:**
 ```typescript
-priority: Priority.PriorityHigh
+priority: Priority.PriorityImmediate
 ```
 
 **When to use:**
-- Set `PriorityBurst` for immediate threats or emergency alerts
-- Use `PriorityHigh` for detections and tracks
-- Use `PriorityLow` for auxiliary information, metadata, or non-urgent updates
+- Set `PriorityFlash` for immediate threats or emergency alerts
+- Use `PriorityImmediate` for detections and tracks
+- Use `PriorityRoutine` for auxiliary information, metadata, or non-urgent updates
 
 ---
 
@@ -158,10 +158,17 @@ Visual representation using military symbology standards.
 - `milStd2525C` (string) - MIL-STD-2525C symbol identification code (SIDC)
 
 **Common SIDCs:**
-- `SFGPES----` - Friendly ground radar
-- `SFGPE-----` - Friendly ground sensor
-- `SHAPMFQ----` - Hostile air track (rotary wing)
-- `SUAPMFQ----` - Unknown air track
+
+| SIDC | Description |
+|------|-------------|
+| `SFGPUCI---` | Friendly ground command post |
+| `SFGPES----` | Friendly ground radar |
+| `SFGPE-----` | Friendly ground sensor |
+| `SHAP------` | Hostile air track |
+| `SHAPMFQ---` | Hostile air rotary wing |
+| `SUAP------` | Unknown air track |
+| `SUGP------` | Unknown ground track |
+| `SNAP------` | Neutral air track |
 
 **Example:**
 ```typescript
@@ -242,7 +249,14 @@ Provides video feed URLs for visual observation.
 
 **Camera fields:**
 - `label` (string) - Display name for this feed
-- `url` (string) - Streaming URL (RTSP, HLS, etc.)
+- `url` (string) - Streaming URL
+- `protocol` (CameraProtocol) - Streaming protocol type
+
+**CameraProtocol values:**
+- `CameraProtocolWebrtc` - WebRTC stream
+- `CameraProtocolHls` - HLS stream
+- `CameraProtocolMjpeg` - MJPEG stream
+- `CameraProtocolImage` - Static image URL
 
 **Example:**
 ```typescript
@@ -250,11 +264,13 @@ camera: {
   cameras: [
     {
       label: 'Main View',
-      url: 'rtsp://camera.example.com/stream1'
+      url: 'https://camera.example.com/stream1',
+      protocol: CameraProtocol.CameraProtocolHls
     },
     {
       label: 'Thermal',
-      url: 'rtsp://camera.example.com/thermal'
+      url: 'https://camera.example.com/thermal',
+      protocol: CameraProtocol.CameraProtocolMjpeg
     }
   ]
 }
@@ -299,6 +315,166 @@ taskable: {
 
 ---
 
+## Kinematics
+
+### KinematicsComponent
+
+Velocity and acceleration in the local East-North-Up (ENU) coordinate frame.
+
+**Fields:**
+- `velocityEnu` (KinematicsEnu, optional) - Velocity vector in m/s
+- `accelerationEnu` (KinematicsEnu, optional) - Acceleration vector in m/s²
+
+**KinematicsEnu fields:**
+- `east` (double, optional) - East component in m/s (or m/s² for acceleration)
+- `north` (double, optional) - North component
+- `up` (double, optional) - Up component
+
+The ENU frame is a right-handed Cartesian coordinate system with origin at the entity's position, where:
+- East axis: tangent to the latitude line, pointing eastward
+- North axis: tangent to the longitude line, pointing northward
+- Up axis: perpendicular to the WGS84 ellipsoid, pointing away from Earth center
+
+Note: This is NOT a body frame - the axes do not rotate with the entity's heading/attitude.
+
+**Example:**
+```typescript
+kinematics: {
+  velocityEnu: {
+    east: 10.5,   // Moving east at 10.5 m/s
+    north: -5.2,  // Moving south at 5.2 m/s
+    up: 0.0       // No vertical movement
+  },
+  accelerationEnu: {
+    east: 0.1,
+    north: 0.0,
+    up: 0.0
+  }
+}
+```
+
+**When to use:** Moving tracks, aircraft, vehicles, or any entity with known velocity/acceleration.
+
+---
+
+## Geometry
+
+### GeoShapeComponent
+
+Defines geographic shapes beyond simple point locations.
+
+**Fields:**
+- `geometry` (Geometry, optional) - The shape definition
+
+**Geometry types:**
+- `planar.point` - A single 2.5D point (longitude, latitude, optional altitude)
+- `planar.line` - A path/line defined by multiple points (ring)
+- `planar.polygon` - An enclosed area with optional holes
+
+**PlanarPoint fields:**
+- `longitude` (double) - Decimal degrees, -180 to 180
+- `latitude` (double) - Decimal degrees, -90 to 90
+- `altitude` (double, optional) - Meters above WGS84 ellipsoid
+
+**PlanarPolygon fields:**
+- `outer` (PlanarRing) - The outer boundary (must be closed: first point = last point)
+- `holes` (array of PlanarRing, optional) - Interior holes
+
+**Example:**
+```typescript
+shape: {
+  geometry: {
+    planar: {
+      polygon: {
+        outer: {
+          points: [
+            { longitude: 13.4, latitude: 52.5 },
+            { longitude: 13.5, latitude: 52.5 },
+            { longitude: 13.5, latitude: 52.6 },
+            { longitude: 13.4, latitude: 52.6 },
+            { longitude: 13.4, latitude: 52.5 }  // Closed ring
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+**When to use:** Zones, boundaries, flight corridors, no-fly areas, search areas.
+
+---
+
+## Classification
+
+### ClassificationComponent
+
+Structured classification using standard military identity and battle dimension.
+
+**Fields:**
+- `dimension` (ClassificationBattleDimension, optional) - The battle dimension
+- `identity` (ClassificationIdentity, optional) - Friend/foe identification
+
+**ClassificationIdentity values:**
+| Value | Code | Description |
+|-------|------|-------------|
+| `ClassificationIdentityPending` | P | Awaiting classification |
+| `ClassificationIdentityUnknown` | U | Cannot be determined |
+| `ClassificationIdentityFriend` | F | Friendly force |
+| `ClassificationIdentityNeutral` | N | Neutral party |
+| `ClassificationIdentityHostile` | H | Hostile force |
+| `ClassificationIdentitySuspect` | S | Suspected hostile |
+
+**ClassificationBattleDimension values:**
+| Value | Code | Description |
+|-------|------|-------------|
+| `ClassificationBattleDimensionUnknown` | Z | Unknown dimension |
+| `ClassificationBattleDimensionSpace` | P | Space |
+| `ClassificationBattleDimensionAir` | A | Air |
+| `ClassificationBattleDimensionGround` | G | Ground |
+| `ClassificationBattleDimensionSeaSurface` | S | Sea surface |
+| `ClassificationBattleDimensionSubsurface` | U | Subsurface |
+
+**Example:**
+```typescript
+classification: {
+  dimension: ClassificationBattleDimension.ClassificationBattleDimensionAir,
+  identity: ClassificationIdentity.ClassificationIdentityHostile
+}
+```
+
+**When to use:** Tracks and detections where structured IFF data is available, separate from or in addition to MIL-STD-2525C symbology.
+
+---
+
+## Configuration
+
+### ConfigurationComponent
+
+Stores arbitrary configuration data as key-value pairs.
+
+**Fields:**
+- `controller` (string) - ID of the system that owns this configuration
+- `key` (string) - Configuration key name
+- `value` (Struct) - JSON-like value object
+
+**Example:**
+```typescript
+config: {
+  controller: 'sensor-manager',
+  key: 'radar-settings',
+  value: {
+    range: 10000,
+    sensitivity: 'high',
+    scanMode: 'continuous'
+  }
+}
+```
+
+**When to use:** System settings, device configuration, runtime parameters.
+
+---
+
 ## Component Combinations
 
 ### Common Patterns
@@ -320,7 +496,12 @@ taskable: {
 
 **Fused Track:**
 ```typescript
-{ id, geo, symbol, track, bearing, locationUncertainty }
+{ id, geo, symbol, track, bearing, kinematics, locationUncertainty, classification }
+```
+
+**Zone/Area:**
+```typescript
+{ id, label, shape, symbol }
 ```
 
 **Task Assignment:**
