@@ -1,0 +1,497 @@
+---
+title: Integrating Mission Systems
+description: Connect downstream mission systems to Hydra's situational awareness picture
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+## Overview
+
+This guide explains how to integrate a downstream mission system with Hydra. By the end, you'll understand:
+
+- The integration architecture (gRPC, not REST)
+- How to receive entities from Hydra (COP, tracks, sensor status)
+- How to push entities to Hydra (own position, detections)
+- The data fields available for each entity type
+
+## Integration Architecture
+
+### Protocol: gRPC
+
+Hydra exposes a **gRPC API on port 50051**. There is no REST interface.
+
+If your system requires REST, you have two options:
+1. **Recommended:** Use our gRPC client libraries (TypeScript, Python, Go) and build a thin adapter in your system
+2. **Alternative:** Build a REST-to-gRPC gateway as a separate service
+
+### Bidirectional Data Flow
+
+```
+┌─────────────────────┐                      ┌─────────────────────┐
+│   Mission System    │                      │        Hydra        │
+│                     │                      │                     │
+│  ┌───────────────┐  │      Push()          │  ┌───────────────┐  │
+│  │ Own Position  │──┼─────────────────────>│  │               │  │
+│  │ Sensor Data   │  │                      │  │   Entity      │  │
+│  └───────────────┘  │                      │  │   Store       │  │
+│                     │                      │  │               │  │
+│  ┌───────────────┐  │   WatchEntities()    │  │               │  │
+│  │ COP Display   │<─┼─────────────────────>│  │               │  │
+│  │ Tracks        │  │      (streaming)     │  └───────────────┘  │
+│  └───────────────┘  │                      │                     │
+└─────────────────────┘                      └─────────────────────┘
+```
+
+**Inbound to Hydra (your system pushes):**
+- Own platform position
+- Sensor detections
+- Asset status
+
+**Outbound from Hydra (your system receives):**
+- Common Operating Picture (all entities)
+- Fused tracks from multiple sensors
+- Sensor status from other systems
+
+## gRPC Service Methods
+
+### WorldService
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `Push` | Unary | Push entities to Hydra |
+| `WatchEntities` | Server streaming | Subscribe to real-time entity updates |
+| `ListEntities` | Unary | Query current entity snapshot |
+| `GetEntity` | Unary | Get single entity by ID |
+| `RunTask` | Unary | Execute a taskable entity |
+
+## Receiving Entities from Hydra
+
+### WatchEntities (Streaming Subscription)
+
+Subscribe to receive real-time entity updates. This is the primary method for receiving the COP.
+
+<Tabs items={['TypeScript', 'Python', 'Go']}>
+  <Tab value="TypeScript">
+```typescript
+import { WorldService } from "@projectqai/proto/world";
+import { createClient } from "@connectrpc/connect";
+import { createGrpcTransport } from "@connectrpc/connect-node";
+
+const transport = createGrpcTransport({
+  baseUrl: "http://localhost:50051",
+  httpVersion: "2"
+});
+
+const client = createClient(WorldService, transport);
+
+// Subscribe to all entity changes
+async function watchEntities() {
+  const stream = client.watchEntities({});
+
+  for await (const event of stream) {
+    if (event.entity) {
+      console.log('Entity update:', event.entity.id);
+      console.log('  Position:', event.entity.geo);
+      console.log('  Symbol:', event.entity.symbol?.milStd2525C);
+    }
+    if (event.expired) {
+      console.log('Entity expired:', event.expired.id);
+    }
+  }
+}
+
+watchEntities();
+```
+  </Tab>
+  <Tab value="Python">
+```python
+import grpc
+from world_pb2 import WatchEntitiesRequest
+from world_pb2_grpc import WorldServiceStub
+
+def watch_entities():
+    channel = grpc.insecure_channel('localhost:50051')
+    client = WorldServiceStub(channel)
+
+    request = WatchEntitiesRequest()
+
+    for event in client.WatchEntities(request):
+        if event.HasField('entity'):
+            entity = event.entity
+            print(f'Entity update: {entity.id}')
+            if entity.HasField('geo'):
+                print(f'  Position: {entity.geo.latitude}, {entity.geo.longitude}')
+            if entity.HasField('symbol'):
+                print(f'  Symbol: {entity.symbol.milStd2525C}')
+
+        if event.HasField('expired'):
+            print(f'Entity expired: {event.expired.id}')
+
+if __name__ == '__main__':
+    watch_entities()
+```
+  </Tab>
+  <Tab value="Go">
+```go
+package main
+
+import (
+    "context"
+    "io"
+    "log"
+
+    "google.golang.org/grpc"
+    "google.golang.org/grpc/credentials/insecure"
+    pb "github.com/projectqai/proto/go"
+)
+
+func watchEntities() {
+    conn, err := grpc.Dial("localhost:50051",
+        grpc.WithTransportCredentials(insecure.NewCredentials()))
+    if err != nil {
+        log.Fatalf("Failed to connect: %v", err)
+    }
+    defer conn.Close()
+
+    client := pb.NewWorldServiceClient(conn)
+
+    stream, err := client.WatchEntities(context.Background(), &pb.WatchEntitiesRequest{})
+    if err != nil {
+        log.Fatalf("WatchEntities failed: %v", err)
+    }
+
+    for {
+        event, err := stream.Recv()
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            log.Fatalf("Stream error: %v", err)
+        }
+
+        if event.Entity != nil {
+            log.Printf("Entity update: %s", event.Entity.Id)
+            if event.Entity.Geo != nil {
+                log.Printf("  Position: %f, %f",
+                    event.Entity.Geo.Latitude,
+                    event.Entity.Geo.Longitude)
+            }
+        }
+
+        if event.Expired != nil {
+            log.Printf("Entity expired: %s", event.Expired.Id)
+        }
+    }
+}
+
+func main() {
+    watchEntities()
+}
+```
+  </Tab>
+</Tabs>
+
+### ListEntities (Snapshot Query)
+
+Get a point-in-time snapshot of all entities:
+
+<Tabs items={['TypeScript', 'Python', 'Go']}>
+  <Tab value="TypeScript">
+```typescript
+const response = await client.listEntities({});
+
+for (const entity of response.entities) {
+  console.log('Entity:', entity.id);
+}
+```
+  </Tab>
+  <Tab value="Python">
+```python
+request = ListEntitiesRequest()
+response = client.ListEntities(request)
+
+for entity in response.entities:
+    print(f'Entity: {entity.id}')
+```
+  </Tab>
+  <Tab value="Go">
+```go
+response, err := client.ListEntities(context.Background(), &pb.ListEntitiesRequest{})
+if err != nil {
+    log.Fatalf("ListEntities failed: %v", err)
+}
+
+for _, entity := range response.Entities {
+    log.Printf("Entity: %s", entity.Id)
+}
+```
+  </Tab>
+</Tabs>
+
+## Pushing Entities to Hydra
+
+### Own Position
+
+Push your platform's position as an entity:
+
+```typescript
+const ownPosition = {
+  id: 'mission-system-001',           // Unique ID for your system
+  label: 'Command Post Alpha',
+  controller: {
+    id: 'your-system-id',             // Identifies your system as the source
+    name: 'Your Mission System'
+  },
+  geo: {
+    latitude: 52.5200,
+    longitude: 13.4050,
+    altitude: 100
+  },
+  symbol: {
+    milStd2525C: 'SFGPUCI---'         // Friendly ground command post
+  }
+};
+
+await client.push({ changes: [ownPosition] });
+```
+
+### Sensor Status
+
+Push sensor status as entities:
+
+```typescript
+const sensor = {
+  id: 'radar-station-1',
+  label: 'North Radar',
+  controller: {
+    id: 'your-system-id',
+    name: 'Your Mission System'
+  },
+  geo: {
+    latitude: 52.5300,
+    longitude: 13.4100,
+    altitude: 50
+  },
+  symbol: {
+    milStd2525C: 'SFGPES----'         // Friendly ground radar
+  },
+  bearing: {
+    azimuth: 180,                      // Current pointing direction
+    elevation: 0
+  }
+};
+
+await client.push({ changes: [sensor] });
+```
+
+To indicate sensor status (online/offline/degraded), update the entity with appropriate symbology or use the `lifetime` component to expire offline sensors.
+
+### Detections
+
+Push sensor detections:
+
+```typescript
+const detection = {
+  id: 'detection-' + Date.now(),
+  controller: {
+    id: 'your-system-id',
+    name: 'Your Mission System'
+  },
+  geo: {
+    latitude: 52.5400,
+    longitude: 13.4200,
+    altitude: 500
+  },
+  bearing: {
+    azimuth: 45,
+    elevation: 10
+  },
+  detection: {
+    detectorEntityID: 'radar-station-1',  // Links to your sensor
+    classification: 'drone',
+    lastMeasured: new Date().toISOString()
+  },
+  lifetime: {
+    until: new Date(Date.now() + 5000)    // Expires in 5 seconds if not updated
+  }
+};
+
+await client.push({ changes: [detection] });
+```
+
+## Data Field Reference
+
+### Entity Structure
+
+Every entity has this structure:
+
+```typescript
+{
+  id: string,                    // Required. Unique identifier
+  label?: string,                // Optional. Human-readable name
+
+  // Metadata
+  controller?: {
+    id: string,                  // Your system's unique ID
+    name: string                 // Human-readable system name
+  },
+  lifetime?: {
+    from?: Timestamp,            // When entity becomes valid
+    until?: Timestamp            // When entity expires (auto-removed)
+  },
+  priority?: Priority,           // QoS: PriorityLow(1), PriorityHigh(2), PriorityBurst(3)
+
+  // Spatial
+  geo?: {
+    latitude: double,            // -90 to 90 (WGS84)
+    longitude: double,           // -180 to 180 (WGS84)
+    altitude: double             // Meters above WGS84 ellipsoid
+  },
+  bearing?: {
+    azimuth?: double,            // 0-360 degrees, 0 = North
+    elevation?: double           // -90 to 90 degrees
+  },
+  locationUncertainty?: {
+    positionEnuCov?: {           // Position covariance (ENU)
+      mxx, mxy, mxz, myy, myz, mzz: double
+    },
+    velocityEnuCov?: {           // Velocity covariance (ENU)
+      mxx, mxy, mxz, myy, myz, mzz: double
+    }
+  },
+
+  // Visual
+  symbol?: {
+    milStd2525C: string          // MIL-STD-2525C SIDC
+  },
+
+  // Sensor/Detection
+  detection?: {
+    detectorEntityID?: string,   // Source sensor entity ID
+    classification?: string,     // e.g., "drone", "vehicle", "person"
+    lastMeasured?: Timestamp
+  },
+  track?: {},                    // Presence indicates fused track
+  locator?: {
+    locatedEntityID: string      // Entity being tracked
+  },
+
+  // Video
+  camera?: {
+    cameras: [{
+      label: string,
+      url: string                // RTSP, HLS, etc.
+    }]
+  },
+
+  // Tasking
+  taskable?: {
+    label?: string,
+    context: [{ entityId: string }],
+    assignee: [{ entityId: string }]
+  }
+}
+```
+
+### Common Entity Patterns
+
+**Own Position (Blue Force):**
+```typescript
+{ id, label, controller, geo, symbol }
+```
+
+**Sensor Station:**
+```typescript
+{ id, label, controller, geo, symbol, bearing, camera? }
+```
+
+**Detection (raw sensor output):**
+```typescript
+{ id, controller, geo?, bearing, detection, lifetime }
+```
+
+**Fused Track:**
+```typescript
+{ id, geo, symbol, track, bearing?, locationUncertainty? }
+```
+
+### Common MIL-STD-2525C Symbols
+
+| SIDC | Description |
+|------|-------------|
+| `SFGPUCI---` | Friendly ground command post |
+| `SFGPES----` | Friendly ground radar |
+| `SFGPE-----` | Friendly ground sensor |
+| `SHAP------` | Hostile air track |
+| `SHAPMFQ---` | Hostile air rotary wing |
+| `SUAP------` | Unknown air track |
+| `SUGP------` | Unknown ground track |
+| `SNAP------` | Neutral air track |
+
+## Updating and Removing Entities
+
+### Updating Entities
+
+Push an entity with the same `id` to update it. Updates are full replacements - include all fields you want to keep.
+
+```typescript
+// Initial entity
+const sensor = {
+  id: 'radar-station-1',
+  geo: { latitude: 52.53, longitude: 13.41, altitude: 50 },
+  symbol: { milStd2525C: 'SFGPES----' },
+  bearing: { azimuth: 180 }
+};
+await client.push({ changes: [sensor] });
+
+// Update: change bearing (must include all fields)
+const updatedSensor = {
+  id: 'radar-station-1',  // Same ID = update
+  geo: { latitude: 52.53, longitude: 13.41, altitude: 50 },
+  symbol: { milStd2525C: 'SFGPES----' },
+  bearing: { azimuth: 270 }  // New bearing
+};
+await client.push({ changes: [updatedSensor] });
+```
+
+### Removing Entities
+
+To remove an entity immediately, set `lifetime.until` to the current time (or past):
+
+```typescript
+const removeEntity = {
+  id: 'entity-to-remove',
+  lifetime: {
+    until: new Date()  // Expires immediately
+  }
+};
+await client.push({ changes: [removeEntity] });
+```
+
+Subscribers will receive an `expired` event for this entity.
+
+## Integration Checklist
+
+1. **Install gRPC client library** for your language
+2. **Establish connection** to Hydra on port 50051
+3. **Set your controller ID** - use a consistent ID across all entities you push
+4. **Push own position** - your system's location
+5. **Subscribe to WatchEntities** - receive the COP
+6. **Push sensor data** - detections, sensor status
+7. **Handle entity expiration** - entities with `lifetime.until` auto-expire
+
+## Client Libraries
+
+| Language | Package |
+|----------|---------|
+| TypeScript | `npm install @projectqai/proto @connectrpc/connect @connectrpc/connect-node` |
+| Python | `pip install grpcio grpcio-tools` + proto files |
+| Go | `go get github.com/projectqai/proto/go` |
+
+Proto files are available at: [github.com/projectqai/hydra/proto](https://github.com/projectqai/hydra)
+
+## Next Steps
+
+- [Component Reference](/docs/components) - Detailed documentation of all components
+- [Creating Entities](/docs/creating-entities) - More examples of entity creation
+- [Taskables](/docs/taskables) - Coordinate actions between systems
