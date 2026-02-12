@@ -1,15 +1,15 @@
 ---
 title: Creating Entities
-description: Learn how to create and push entities to Hydra in TypeScript, Python, and Go
+description: Learn how to create and push entities to Hydris in TypeScript, Python, and Go
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ## Overview
 
-Creating entities in Hydra involves:
+Creating entities in Hydris involves:
 1. Defining entity objects with components
-2. Connecting to the Hydra gRPC service
+2. Connecting to the Hydris gRPC service
 3. Pushing entities using the `Push` RPC method
 
 This guide shows examples primarily in TypeScript, with patterns applicable to Python and Go.
@@ -31,7 +31,7 @@ const entity = {
 
 ## Complete Example
 
-Here's a complete example showing how to create several entities and push them to Hydra:
+Here's a complete example showing how to create several entities and push them to Hydris:
 
 <Tabs items={['TypeScript', 'Python', 'Go']}>
   <Tab value="TypeScript">
@@ -272,7 +272,7 @@ const temporaryMarker = {
 };
 ```
 
-Hydra automatically expires entities when their `until` time is reached.
+Hydris automatically expires entities when their `until` time is reached.
 
 ## Next Steps
 

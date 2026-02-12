@@ -54,7 +54,7 @@ export default function HomePage() {
 								</svg>
 							</Link>
 							<a
-								href="https://github.com/projectqai/hydra"
+								href="https://github.com/projectqai/hydris"
 								className="inline-flex items-center gap-2 px-8 py-3 border-2 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 text-black dark:text-white rounded-lg font-semibold transition-all duration-200"
 								target="_blank"
 								rel="noopener noreferrer"
@@ -100,7 +100,7 @@ export default function HomePage() {
 							Built for Real-World Coordination
 						</h2>
 						<p className="text-xl text-gray-600 dark:text-gray-400">
-							From sensor networks to field operations, Hydra handles the complexity
+							From sensor networks to field operations, Hydris handles the complexity
 							of multi-system integration so you can focus on the mission.
 						</p>
 					</div>
@@ -132,7 +132,7 @@ export default function HomePage() {
 						<div className="p-8 rounded-lg border border-gray-300 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 hover:border-green-500/50 transition-all duration-300">
 							<h3 className="text-xl font-semibold mb-3 text-black dark:text-white">Vendor Neutral</h3>
 							<p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-								Bring your own sensors, your own command systems, your own displays. Hydra adapts to your stack—not the other way around.
+								Bring your own sensors, your own command systems, your own displays. Hydris adapts to your stack—not the other way around.
 							</p>
 						</div>
 					</div>
@@ -148,8 +148,8 @@ export default function HomePage() {
 							How It Works
 						</h2>
 						<p className="text-xl text-gray-600 dark:text-gray-400">
-							Integrations are built with the Hydra SDK, run on each node,
-							and translate between external systems and Hydra's entity model.
+							Integrations are built with the Hydris SDK, run on each node,
+							and translate between external systems and Hydris's entity model.
 						</p>
 					</div>
 
@@ -166,7 +166,7 @@ export default function HomePage() {
 								</div>
 
 								<div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 text-center min-w-[180px]">
-									<h4 className="font-semibold text-black dark:text-white mb-2">Hydra Node</h4>
+									<h4 className="font-semibold text-black dark:text-white mb-2">Hydris Node</h4>
 									<p className="text-sm text-gray-600 dark:text-gray-400">SDK + Entity Model</p>
 								</div>
 
@@ -184,7 +184,7 @@ export default function HomePage() {
 								<p className="text-gray-600 dark:text-gray-400">
 									One connector unlocks the entire network. Skip lengthy point-to-point integration cycles.{' '}
 									<br className="hidden sm:block" />
-									Hydra Node is open source under <code className="font-mono text-sm bg-gray-200 dark:bg-zinc-800 px-2 py-1 rounded text-green-600 dark:text-green-400">Apache 2.0</code>—forever, no vendor lock-in.
+									Hydris Node is open source under <code className="font-mono text-sm bg-gray-200 dark:bg-zinc-800 px-2 py-1 rounded text-green-600 dark:text-green-400">Apache 2.0</code>—forever, no vendor lock-in.
 								</p>
 							</div>
 						</div>
@@ -213,7 +213,7 @@ export default function HomePage() {
 								Sensor & System Vendors
 							</h3>
 							<p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-								Integrate once, reach every Hydra deployment. You bring the capability—we co-build interoperability from your system to the mission.
+								Integrate once, reach every Hydris deployment. You bring the capability—we co-build interoperability from your system to the mission.
 							</p>
 						</div>
 
@@ -233,7 +233,7 @@ export default function HomePage() {
 								Field Teams
 							</h3>
 							<p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
-								Go from new asset arriving to operational use faster. Dynamically choose capabilities for your mission. Use your existing tools or Hydra View.
+								Go from new asset arriving to operational use faster. Dynamically choose capabilities for your mission. Use your existing tools or Hydris View.
 							</p>
 						</div>
 					</div>
@@ -252,7 +252,7 @@ export default function HomePage() {
 									Ready to Connect Your Network?
 								</h2>
 								<p className="text-xl text-gray-600 dark:text-gray-400 mb-10 max-w-2xl mx-auto">
-									Download Hydra and start coordinating your systems in minutes.
+									Download Hydris and start coordinating your systems in minutes.
 								</p>
 
 								<div className="flex flex-wrap gap-4 justify-center mb-10">
@@ -266,7 +266,7 @@ export default function HomePage() {
 										</svg>
 									</Link>
 									<a
-										href="https://github.com/projectqai/hydra"
+										href="https://github.com/projectqai/hydris"
 										className="inline-flex items-center gap-2 px-8 py-3 border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-zinc-900 hover:border-gray-400 dark:hover:border-gray-600 text-black dark:text-white rounded-lg font-semibold transition-all duration-200"
 										target="_blank"
 										rel="noopener noreferrer"
@@ -279,8 +279,8 @@ export default function HomePage() {
 									<a href="https://projectqai.github.io" className="hover:text-green-500 transition-colors">
 										projectqai.github.io
 									</a>
-									<a href="https://github.com/projectqai/hydra" className="hover:text-green-500 transition-colors">
-										github.com/projectqai/hydra
+									<a href="https://github.com/projectqai/hydris" className="hover:text-green-500 transition-colors">
+										github.com/projectqai/hydris
 									</a>
 								</div>
 							</div>

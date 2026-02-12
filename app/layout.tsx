@@ -10,21 +10,21 @@ const inter = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL('https://projectqai.github.io'),
   title: {
-    default: 'Hydra Documentation',
-    template: '%s | Hydra',
+    default: 'Hydris Documentation',
+    template: '%s | Hydris',
   },
   description: 'Open-source situational awareness machine connecting heterogeneous sensors for time-critical missions',
   openGraph: {
-    title: 'Hydra Documentation',
+    title: 'Hydris Documentation',
     description: 'Open-source situational awareness machine connecting heterogeneous sensors for time-critical missions',
     url: 'https://projectqai.github.io',
-    siteName: 'Hydra',
+    siteName: 'Hydris',
     images: [
       {
-        url: '/hydra-screenshot.png',
+        url: '/hydris-screenshot.png',
         width: 2880,
         height: 1800,
-        alt: 'Hydra tactical coordination interface',
+        alt: 'Hydris tactical coordination interface',
       },
     ],
     locale: 'en_US',
@@ -32,9 +32,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Hydra Documentation',
+    title: 'Hydris Documentation',
     description: 'Open-source situational awareness machine connecting heterogeneous sensors for time-critical missions',
-    images: ['/hydra-screenshot.png'],
+    images: ['/hydris-screenshot.png'],
   },
 };
 

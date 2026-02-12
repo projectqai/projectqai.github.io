@@ -1,6 +1,6 @@
 ---
 title: Connecting an Awareness Tool
-description: Connect Hydra to Situational Awareness Tools like ATAK
+description: Connect Hydris to Situational Awareness Tools like ATAK
 ---
 
 ## What is a BMS?
@@ -9,20 +9,20 @@ A **Situational Awareness Tool** is a tactical software platform used for comman
 
 ## ATAK Integration
 
-In the open source version of Hydra, we support integration with **ATAK (Android Team Awareness Kit)**, a widely-used tactical awareness platform.
+In the open source version of Hydris, we support integration with **ATAK (Android Team Awareness Kit)**, a widely-used tactical awareness platform.
 
-Hydra can broadcast its situational awareness picture to ATAK, allowing teams to visualize entities, detections, and tracks from Hydra directly within their ATAK clients for Android, Windows and iPhone.
+Hydris can broadcast its situational awareness picture to ATAK, allowing teams to visualize entities, detections, and tracks from Hydris directly within their ATAK clients for Android, Windows and iPhone.
 
-## Running Hydra with ATAK
+## Running Hydris with ATAK
 
-Hydra provides two modes for ATAK integration:
+Hydris provides two modes for ATAK integration:
 
 ### SA Mesh Mode (Broadcast)
 
-In this mode, Hydra broadcasts the awareness picture directly to the SA Mesh network. This requires Hydra and ATAK clients to be on the same L2 network (does not work over the internet)
+In this mode, Hydris broadcasts the awareness picture directly to the SA Mesh network. This requires Hydris and ATAK clients to be on the same L2 network (does not work over the internet)
 
 ```bash
-./hydra builtin tak
+./hydris builtin tak
 ```
 
 This mode:
@@ -32,35 +32,35 @@ This mode:
 
 ### ATAK Server Mode (TCP)
 
-In this mode, Hydra runs a TAK server itself, that ATAK clients can connect to directly.
+In this mode, Hydris runs a TAK server itself, that ATAK clients can connect to directly.
 
 ```bash
-./hydra builtin tak --server=:8087
+./hydris builtin tak --server=:8087
 ```
 
 This mode:
-- Starts Hydra as a TCP server on port 8087 (or your specified port)
-- Allows ATAK clients to add Hydra as a TCP server
+- Starts Hydris as a TCP server on port 8087 (or your specified port)
+- Allows ATAK clients to add Hydris as a TCP server
 - Works across different networks and NAT boundaries
 
-#### Adding Hydra as a TCP Server in ATAK
+#### Adding Hydris as a TCP Server in ATAK
 
-Once Hydra is running in server mode:
+Once Hydris is running in server mode:
 
 1. Open ATAK on your device
 2. Navigate to Settings → Network Preferences
 3. Tak Servers
 4. Press the ... on top right
 5. Add
-6. Address: Ip address of the device running hydra
+6. Address: Ip address of the device running hydris
 7. Advanced Options, select TCP Streaming Protocl on port 8088
 6. Save and connect
 
-ATAK will now receive real-time entity updates from Hydra and display them on the map.
+ATAK will now receive real-time entity updates from Hydris and display them on the map.
 
 ## What Gets Shared
 
-When connected to ATAK, Hydra automatically shares:
+When connected to ATAK, Hydris automatically shares:
 
 - **Entities with geospatial components** - All entities with position data appear on the ATAK map
 - **Symbols** - MIL-STD-2525C symbols are translated to ATAK's symbol format
@@ -68,7 +68,7 @@ When connected to ATAK, Hydra automatically shares:
 - **Detections** - Raw sensor detections with bearing information
 - **Metadata** - Entity labels, classifications, and timestamps
 
-The ATAK integration respects Hydra's Entity Component System - only entities with `geo` components are visualized, while other entities remain in the awareness picture for programmatic access.
+The ATAK integration respects Hydris's Entity Component System - only entities with `geo` components are visualized, while other entities remain in the awareness picture for programmatic access.
 
 ## Next Steps
 

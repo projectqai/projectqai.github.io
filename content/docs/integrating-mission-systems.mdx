@@ -1,24 +1,24 @@
 ---
 title: Integrating Mission Systems
-description: Connect downstream mission systems to Hydra's situational awareness picture
+description: Connect downstream mission systems to Hydris's situational awareness picture
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ## Overview
 
-This guide explains how to integrate a downstream mission system with Hydra. By the end, you'll understand:
+This guide explains how to integrate a downstream mission system with Hydris. By the end, you'll understand:
 
 - The integration architecture (gRPC, not REST)
-- How to receive entities from Hydra (COP, tracks, sensor status)
-- How to push entities to Hydra (own position, detections)
+- How to receive entities from Hydris (COP, tracks, sensor status)
+- How to push entities to Hydris (own position, detections)
 - The data fields available for each entity type
 
 ## Integration Architecture
 
 ### Protocol: gRPC + REST
 
-Hydra exposes an API on **port 50051** using [ConnectRPC](https://connectrpc.com/). ConnectRPC supports multiple protocols:
+Hydris exposes an API on **port 50051** using [ConnectRPC](https://connectrpc.com/). ConnectRPC supports multiple protocols:
 
 - **gRPC** - Full gRPC with HTTP/2 streaming
 - **gRPC-Web** - Browser-compatible gRPC
@@ -30,7 +30,7 @@ This means you can use REST-style JSON requests if your system doesn't support g
 
 ```
 ┌─────────────────────┐                      ┌─────────────────────┐
-│   Mission System    │                      │        Hydra        │
+│   Mission System    │                      │        Hydris        │
 │                     │                      │                     │
 │  ┌───────────────┐  │      Push()          │  ┌───────────────┐  │
 │  │ Own Position  │──┼─────────────────────>│  │               │  │
@@ -44,12 +44,12 @@ This means you can use REST-style JSON requests if your system doesn't support g
 └─────────────────────┘                      └─────────────────────┘
 ```
 
-**Inbound to Hydra (your system pushes):**
+**Inbound to Hydris (your system pushes):**
 - Own platform position
 - Sensor detections
 - Asset status
 
-**Outbound from Hydra (your system receives):**
+**Outbound from Hydris (your system receives):**
 - Common Operating Picture (all entities)
 - Fused tracks from multiple sensors
 - Sensor status from other systems
@@ -60,13 +60,13 @@ This means you can use REST-style JSON requests if your system doesn't support g
 
 | Method | Type | Description |
 |--------|------|-------------|
-| `Push` | Unary | Push entities to Hydra |
+| `Push` | Unary | Push entities to Hydris |
 | `WatchEntities` | Server streaming | Subscribe to real-time entity updates |
 | `ListEntities` | Unary | Query current entity snapshot |
 | `GetEntity` | Unary | Get single entity by ID |
 | `RunTask` | Unary | Execute a taskable entity |
 
-## Receiving Entities from Hydra
+## Receiving Entities from Hydris
 
 ### WatchEntities (Streaming Subscription)
 
@@ -230,7 +230,7 @@ for _, entity := range response.Entities {
   </Tab>
 </Tabs>
 
-## Pushing Entities to Hydra
+## Pushing Entities to Hydris
 
 ### Own Position
 
@@ -370,7 +370,7 @@ Subscribers will receive an `expired` event for this entity.
 ## Integration Checklist
 
 1. **Install gRPC client library** for your language
-2. **Establish connection** to Hydra on port 50051
+2. **Establish connection** to Hydris on port 50051
 3. **Set your controller ID** - use a consistent ID across all entities you push
 4. **Push own position** - your system's location
 5. **Subscribe to WatchEntities** - receive the COP
@@ -385,7 +385,7 @@ Subscribers will receive an `expired` event for this entity.
 | Python | `pip install grpcio grpcio-tools` + proto files |
 | Go | `go get github.com/projectqai/proto/go` |
 
-Proto files are available at: [github.com/projectqai/hydra/proto](https://github.com/projectqai/hydra)
+Proto files are available at: [github.com/projectqai/hydris/proto](https://github.com/projectqai/hydris)
 
 ## Next Steps
 

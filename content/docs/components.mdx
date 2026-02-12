@@ -1,6 +1,6 @@
 ---
 title: Component Reference
-description: Detailed reference for all entity components in Hydra
+description: Detailed reference for all entity components in Hydris
 ---
 
 ## Overview
@@ -31,7 +31,7 @@ controller: {
 
 ### Lifetime
 
-Defines the temporal validity of an entity. Hydra automatically expires entities when `until` is reached.
+Defines the temporal validity of an entity. Hydris automatically expires entities when `until` is reached.
 
 **Fields:**
 - `from` (Timestamp, optional) - When this entity becomes valid
@@ -83,14 +83,20 @@ Physical location in 3D space using WGS84 coordinates.
 **Fields:**
 - `latitude` (double) - Decimal degrees, -90 to 90
 - `longitude` (double) - Decimal degrees, -180 to 180
-- `altitude` (double) - Meters above WGS84 ellipsoid
+- `altitude` (double, optional) - Meters above WGS84 ellipsoid
+- `covariance` (CovarianceMatrix, optional) - Position uncertainty in ENU frame
 
 **Example:**
 ```typescript
 geo: {
   latitude: 52.5200,
   longitude: 13.4050,
-  altitude: 100
+  altitude: 100,
+  covariance: {
+    mxx: 25.0,   // East variance (m²)
+    myy: 25.0,   // North variance (m²)
+    mzz: 100.0   // Up variance (m²)
+  }
 }
 ```
 
@@ -122,29 +128,26 @@ bearing: {
 
 ---
 
-### LocationUncertaintyComponent
+### OrientationComponent
 
-Represents spatial uncertainty using covariance matrices.
+3D attitude of an entity using a quaternion, with optional angular rates.
 
 **Fields:**
-- `positionEnuCov` (CovarianceMatrix, optional) - Position uncertainty in ENU coordinates
-- `velocityEnuCov` (CovarianceMatrix, optional) - Velocity uncertainty in ENU coordinates
-
-**CovarianceMatrix fields:**
-- `mxx`, `mxy`, `mxz`, `myy`, `myz`, `mzz` (double, optional)
+- `orientation` (Quaternion, optional) - Orientation as a unit quaternion (x, y, z, w)
+- `covariance` (CovarianceMatrix, optional) - Orientation uncertainty
+- `roll_rate` (double, optional) - Roll rate in radians/second (body frame)
+- `pitch_rate` (double, optional) - Pitch rate in radians/second (body frame)
+- `yaw_rate` (double, optional) - Yaw rate in radians/second (body frame)
 
 **Example:**
 ```typescript
-locationUncertainty: {
-  positionEnuCov: {
-    mxx: 10.0,   // Variance in East direction
-    myy: 10.0,   // Variance in North direction
-    mzz: 5.0     // Variance in Up direction
-  }
+orientation: {
+  orientation: { x: 0, y: 0, z: 0.383, w: 0.924 },
+  yaw_rate: 0.1
 }
 ```
 
-**When to use:** Track fusion, sensor accuracy modeling, confidence regions for detections.
+**When to use:** Aircraft, drones, or vehicles where full 3D attitude matters beyond simple bearing.
 
 ---
 
@@ -188,14 +191,14 @@ symbol: {
 Links a detection to its source sensor and provides classification.
 
 **Fields:**
-- `detectorEntityID` (string, optional) - ID of the sensor entity that made this detection
+- `detectorEntityId` (string, optional) - ID of the sensor entity that made this detection
 - `classification` (string, optional) - Type classification (e.g., "drone", "vehicle", "person")
 - `lastMeasured` (Timestamp, optional) - When this detection was last updated
 
 **Example:**
 ```typescript
 detection: {
-  detectorEntityID: 'radar-1',
+  detectorEntityId: 'radar-1',
   classification: 'drone',
   lastMeasured: new Date('2025-01-15T10:30:00Z')
 }
@@ -207,16 +210,23 @@ detection: {
 
 ### TrackComponent
 
-Marks an entity as a fused track (combination of multiple detections).
+Marks an entity as a fused track and optionally links to track history and prediction geometries.
 
-**Fields:** None (presence indicates this is a track)
+**Fields:**
+- `tracker` (string, optional) - ID of the tracker/fusion engine that owns this track
+- `history` (string, optional) - Entity ID of a GeoShapeComponent containing the track history
+- `prediction` (string, optional) - Entity ID of a GeoShapeComponent containing the predicted forward track
 
 **Example:**
 ```typescript
-track: {}
+track: {
+  tracker: 'fusion-engine-1',
+  history: 'track-42.history',
+  prediction: 'track-42.orbit'
+}
 ```
 
-**When to use:** After correlating multiple detections from different sensors into a unified track.
+**When to use:** After correlating multiple detections from different sensors into a unified track. Link to history/prediction shape entities for trail and forecast visualization.
 
 ---
 
@@ -225,16 +235,80 @@ track: {}
 Indicates this sensor is actively locating another entity.
 
 **Fields:**
-- `locatedEntityID` (string) - ID of the entity being located/tracked
+- `locatedEntityId` (string) - ID of the entity being located/tracked
 
 **Example:**
 ```typescript
 locator: {
-  locatedEntityID: 'target-001'
+  locatedEntityId: 'target-001'
 }
 ```
 
 **When to use:** Show which sensors are tracking which targets, sensor-to-target associations.
+
+---
+
+### TransponderComponent
+
+Transponder identifiers for AIS (maritime) and ADS-B (aviation) targets.
+
+**Fields:**
+- `ais` (TransponderAIS, optional) - AIS transponder data
+- `adsb` (TransponderADSB, optional) - ADS-B transponder data
+
+**TransponderAIS fields:**
+- `mmsi` (uint32, optional) - Maritime Mobile Service Identity
+- `imo` (uint32, optional) - IMO ship identification number
+- `callsign` (string, optional) - Radio callsign
+- `vessel_name` (string, optional) - Vessel name
+
+**TransponderADSB fields:**
+- `icao_address` (uint32, optional) - ICAO 24-bit aircraft address
+- `flight_id` (string, optional) - Flight identification / callsign
+
+**Example:**
+```typescript
+transponder: {
+  ais: {
+    mmsi: 211234567,
+    imo: 9876543,
+    callsign: 'DABC',
+    vessel_name: 'MS EXAMPLE'
+  }
+}
+```
+
+**When to use:** Entities originating from AIS or ADS-B sources. Set automatically by the AIS and ADS-B builtins.
+
+---
+
+### AdministrativeComponent
+
+Administrative and registration data for vessels, aircraft, or other registered assets.
+
+**Fields:**
+- `id` (string, optional) - Registration ID (e.g. tail number, hull number)
+- `flag` (string, optional) - Flag state or ICAO type code
+- `owner` (string, optional) - Registered owner or operator
+- `manufacturer` (string, optional) - Manufacturer name
+- `model` (string, optional) - Model designation
+- `year_built` (uint32, optional) - Year of manufacture
+- `length_m` (float, optional) - Length in meters
+- `tonnage_gt` (float, optional) - Gross tonnage
+- `engine_power_kw` (float, optional) - Engine power in kilowatts
+
+**Example:**
+```typescript
+administrative: {
+  id: 'D-AIBL',
+  owner: 'Lufthansa',
+  manufacturer: 'Airbus',
+  model: 'A319-112',
+  year_built: 2010
+}
+```
+
+**When to use:** Enrichment data for tracked assets. Set automatically by the adsbdb and hexdb enrichment builtins.
 
 ---
 
@@ -447,31 +521,170 @@ classification: {
 
 ---
 
-## Configuration
+## Navigation and Mission
+
+### NavigationComponent
+
+Live navigation telemetry of an asset - its current mode, arming state, and mission progress.
+
+**Fields:**
+- `mode` (NavigationMode, optional) - Current navigation mode
+- `armed` (bool, optional) - Whether the asset is armed / active
+- `emergency` (bool, optional) - Emergency flag (squawk 7700, etc.)
+- `waypoint_current` (uint32, optional) - Current waypoint index in the active mission
+- `waypoint_total` (uint32, optional) - Total number of waypoints
+
+**NavigationMode values:**
+| Value | Description |
+|---|---|
+| `NavigationModePlanned` | Planned but not yet active |
+| `NavigationModeStationary` | Anchored, moored, or landed |
+| `NavigationModeUnderway` | Underway, possibly human-controlled |
+| `NavigationModeAutonomous` | Executing a known mission autonomously |
+| `NavigationModeGuided` | Externally guided by a known system |
+| `NavigationModeLoitering` | Orbiting / holding pattern |
+| `NavigationModeReturning` | Return to launch / return to base |
+
+**Example:**
+```typescript
+navigation: {
+  mode: NavigationMode.NavigationModeAutonomous,
+  armed: true,
+  waypoint_current: 3,
+  waypoint_total: 12
+}
+```
+
+**When to use:** Drones, autonomous vehicles, vessels, or any asset reporting navigation telemetry.
+
+---
+
+### MissionComponent
+
+Groups assets into a mission with a description, destination, and ETA.
+
+**Fields:**
+- `members` (string[], optional) - Entity IDs of assets participating in this mission
+- `description` (string, optional) - Human-readable status (can be multi-line / markdown)
+- `destination` (string, optional) - Human-readable destination (e.g. port name)
+- `eta` (Timestamp, optional) - Estimated time of arrival
+
+**Example:**
+```typescript
+mission: {
+  members: ['vessel-1', 'vessel-2'],
+  description: 'Transit to port',
+  destination: 'Hamburg',
+  eta: new Date('2026-03-15T14:00:00Z')
+}
+```
+
+**When to use:** Vessel voyages with destination/ETA, drone missions, convoy tracking, or any coordinated multi-asset operation.
+
+---
+
+## Link and Power
+
+### LinkComponent
+
+Communication link quality and status for an entity, typically set by radio or mesh integrations.
+
+**Fields:**
+- `status` (LinkStatus, optional) - Link health
+- `rssi_dbm` (sint32, optional) - Received signal strength in dBm
+- `snr_db` (sint32, optional) - Signal-to-noise ratio in dB
+- `via` (string, optional) - Entity ID of the device managing the link
+
+**LinkStatus values:**
+| Value | Description |
+|---|---|
+| `LinkStatusConnected` | Link is healthy |
+| `LinkStatusDegraded` | Link is degraded but functional |
+| `LinkStatusLost` | Link has been lost |
+
+**Example:**
+```typescript
+link: {
+  status: LinkStatus.LinkStatusConnected,
+  rssi_dbm: -85,
+  snr_db: 12,
+  via: 'meshtastic.radio-1'
+}
+```
+
+**When to use:** Set automatically by the Meshtastic builtin for mesh-received entities. Can also be set manually to indicate link quality for any networked asset.
+
+---
+
+### PowerComponent
+
+Battery and power status for an entity.
+
+**Fields:**
+- `battery_charge_remaining` (float, optional) - Charge level from 0.0 to 1.0
+- `voltage` (float, optional) - Battery or board voltage in volts
+- `remaining_seconds` (uint32, optional) - Estimated remaining operating time in seconds
+
+**Example:**
+```typescript
+power: {
+  battery_charge_remaining: 0.73,
+  voltage: 3.85,
+  remaining_seconds: 7200
+}
+```
+
+**When to use:** Battery-powered assets like drones, mesh radios, or remote sensors. Set automatically by the Meshtastic builtin from device telemetry.
+
+---
+
+## Device and Configuration
+
+### DeviceComponent
+
+Represents a physical or logical device in the device tree. Used internally by builtins to publish discovered hardware and advertise configurable capabilities.
+
+**Fields:**
+- `parent` (string, optional) - Parent device entity ID, forming the device tree
+- `composition` (string[], optional) - Non-direct ancestor entity IDs
+- `configurable` (Configurable[], optional) - Config keys this device accepts, with schemas
+- `unique_hardware_id` (string, optional) - Stable hardware identifier (e.g. USB serial number)
+- `labels` (map, optional) - Key-value labels for matching
+- `state` (DeviceState) - `DeviceStatePending`, `DeviceStateActive`, or `DeviceStateFailed`
+- `error` (string, optional) - Error message if state is failed
+- `node` (NodeDevice, optional) - Node descriptor (hostname, OS, arch, CPU count)
+- `usb` (UsbDevice, optional) - USB descriptor (VID, PID, manufacturer, product, serial)
+- `ip` (IpDevice, optional) - IP descriptor (host, port)
+- `serial` (SerialDevice, optional) - Serial descriptor (path, baud rate)
+
+**When to use:** You generally don't create device entities directly. They are published by builtins like `serial` and `meshtastic` when hardware is discovered. Use ConfigurationComponent to configure discovered devices.
+
+---
 
 ### ConfigurationComponent
 
-Stores arbitrary configuration data as key-value pairs.
+Activates a builtin integration by pointing a config at a controller and key. This is the primary way to configure Hydris.
 
 **Fields:**
-- `controller` (string) - ID of the system that owns this configuration
-- `key` (string) - Configuration key name
-- `value` (Struct) - JSON-like value object
+- `controller` (string) - Name of the target controller (e.g. `ais`, `adsblol`, `tak`)
+- `key` (string) - Configuration key (e.g. `ais.stream.v0`)
+- `value` (Struct) - Configuration values as a JSON object
+- `selector` (EntityFilter, optional) - Target a specific device or subset of devices. If empty, applies to all devices from this controller that advertise this key.
 
 **Example:**
 ```typescript
 config: {
-  controller: 'sensor-manager',
-  key: 'radar-settings',
+  controller: 'ais',
+  key: 'ais.stream.v0',
   value: {
-    range: 10000,
-    sensitivity: 'high',
-    scanMode: 'continuous'
+    host: '153.44.253.27',
+    port: 5631,
+    entity_expiry_seconds: 300
   }
 }
 ```
 
-**When to use:** System settings, device configuration, runtime parameters.
+**When to use:** Activating and configuring builtin integrations. See the [Builtin Integrations](/docs/builtins) reference for all available config keys.
 
 ---
 
@@ -496,7 +709,22 @@ config: {
 
 **Fused Track:**
 ```typescript
-{ id, geo, symbol, track, bearing, kinematics, locationUncertainty, classification }
+{ id, geo, symbol, track, bearing, kinematics, classification }
+```
+
+**Maritime Vessel (from AIS):**
+```typescript
+{ id, geo, symbol, kinematics, transponder, administrative, navigation, mission }
+```
+
+**Aircraft (from ADS-B):**
+```typescript
+{ id, geo, symbol, kinematics, transponder, administrative, classification }
+```
+
+**Mesh Radio Node:**
+```typescript
+{ id, geo, symbol, link, power }
 ```
 
 **Zone/Area:**
@@ -507,6 +735,11 @@ config: {
 **Task Assignment:**
 ```typescript
 { id, taskable }
+```
+
+**Builtin Config:**
+```typescript
+{ id, config }
 ```
 
 ## Next Steps

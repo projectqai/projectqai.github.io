@@ -1,52 +1,52 @@
 ---
 title: Getting Started
-description: Start building with Hydra situational awareness
+description: Start building with Hydris situational awareness
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ## Quick Start
 
-### 1. Download and Run Hydra
+### 1. Download and Run Hydris
 
 <Tabs items={['macOS', 'Windows', 'Raspberry Pi', 'Android', 'Docker']}>
   <Tab value="macOS">
-    Download the [macOS binary](https://github.com/projectqai/hydra/releases/latest/) and run:
+    Download the [macOS binary](https://github.com/projectqai/hydris/releases/latest/) and run:
 
     ```bash
-    chmod +x hydra
-    ./hydra
+    chmod +x hydris
+    ./hydris
     ```
 
     If macOS blocks the unsigned binary, remove the quarantine attribute:
 
     ```bash
-    xattr -d com.apple.quarantine hydra
+    xattr -d com.apple.quarantine hydris
     ```
 
-    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+    Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
   <Tab value="Windows">
-    Download the [Windows executable](https://github.com/projectqai/hydra/releases/latest/) and run:
+    Download the [Windows executable](https://github.com/projectqai/hydris/releases/latest/) and run:
 
     ```bash
-    ./hydra.exe
+    ./hydris.exe
     ```
 
-    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+    Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
   <Tab value="Raspberry Pi">
-    Download the [ARM Linux binary](https://github.com/projectqai/hydra/releases/latest/):
+    Download the [ARM Linux binary](https://github.com/projectqai/hydris/releases/latest/):
 
     ```bash
-    chmod +x hydra
-    ./hydra
+    chmod +x hydris
+    ./hydris
     ```
 
-    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+    Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
   <Tab value="Android">
-    Download the [APK](https://github.com/projectqai/hydra/releases/latest/) and install on your device.
+    Download the [APK](https://github.com/projectqai/hydris/releases/latest/) and install on your device.
 
     **Sideloading with ADB:**
 
@@ -60,17 +60,17 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
     3. Connect your device and install:
        ```bash
-       adb install -r hydra.apk
+       adb install -r hydris.apk
        ```
   </Tab>
   <Tab value="Docker">
-    Run Hydra using Docker:
+    Run Hydris using Docker:
 
     ```bash
-    docker run -p 50051:50051 -ti ghcr.io/projectqai/hydra:v0.0.14
+    docker run -p 50051:50051 -ti ghcr.io/projectqai/hydris:v0.0.14
     ```
 
-    Hydra starts on `localhost:50051` with a web UI at `http://localhost:50051`
+    Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
 </Tabs>
 
@@ -120,7 +120,7 @@ Install the client libraries for your language:
       }
     });
 
-    // Connect to Hydra and push the entity
+    // Connect to Hydris and push the entity
     const transport = createConnectTransport({
       baseUrl: "http://localhost:50051"
     });
@@ -171,7 +171,7 @@ Install the client libraries for your language:
 
 <Cards>
   <Card title="Understanding Entities" href="/docs/entities">
-    Learn about Hydra's Entity Component System and how entities work
+    Learn about Hydris's Entity Component System and how entities work
   </Card>
   <Card title="Creating Entities" href="/docs/creating-entities">
     Create and push entities with examples in TypeScript, Python, and Go
@@ -183,10 +183,10 @@ Install the client libraries for your language:
     Detailed documentation of all available components
   </Card>
   <Card title="Connecting a BMS" href="/docs/connecting-bms">
-    Connect Hydra to Situational Awareness Tools like ATAK
+    Connect Hydris to Situational Awareness Tools like ATAK
   </Card>
 </Cards>
 
 ## Next Steps
 
-Start by understanding [what entities are](/docs/entities) and how they work in Hydra's architecture.
+Start by understanding [what entities are](/docs/entities) and how they work in Hydris's architecture.

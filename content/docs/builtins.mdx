@@ -1,0 +1,541 @@
+---
+title: Builtin Integrations
+description: Reference for all builtin sensor and system integrations shipped with Hydris
+---
+
+Hydris ships with builtin integrations for common sensors, protocols, and data sources. Each integration is configured by pushing a config entity - no plugins to install, no code to write.
+
+## How Builtins Work
+
+Every builtin controller reacts to one or more **config keys**. To activate an integration, push an entity with a `config` component pointing at the right controller and key:
+
+```yaml
+id: my-ais-feed
+config:
+    controller: ais
+    key: ais.stream.v0
+    value:
+        host: 153.44.253.27
+        port: 5631
+```
+
+The integration starts a controller when a config is matched, and stops when the entity is removed or expired. 
+
+---
+
+## AIS
+
+Maritime vessel tracking via AIS (Automatic Identification System) NMEA streams over TCP.
+
+**Controller:** `ais` | **Config key:** `ais.stream.v0`
+
+Connects to an AIS data source, decodes position reports (Class A and Class B) and static vessel data, and publishes vessel entities with position, velocity, transponder info, and navigation status.
+
+### Configuration
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `host` | string | yes | | TCP host of the AIS NMEA stream |
+| `port` | number | yes | | TCP port of the AIS NMEA stream |
+| `entity_expiry_seconds` | number | | `300` | Seconds before vessel entities expire if not updated |
+| `latitude` | number | | | Center latitude for geographic filter |
+| `longitude` | number | | | Center longitude for geographic filter |
+| `radius_km` | number | | | Radius in km for geographic filter |
+| `self_entity_id` | string | | `ais.self.<id>` | Custom entity ID for self-position from GPS |
+| `self_label` | string | | `Self` | Display label for self-position entity |
+| `self_sidc` | string | | `SFSPXM----*****` | MIL-STD-2525C symbol for self-position |
+| `self_allow_invalid` | boolean | | `false` | Accept GPS fixes marked as invalid |
+
+Geographic filtering only activates when all three fields (`latitude`, `longitude`, `radius_km`) are set.
+
+### Example
+
+```yaml
+id: ais-norway
+config:
+    controller: ais
+    key: ais.stream.v0
+    value:
+        host: 153.44.253.27
+        port: 5631
+        latitude: 53.55
+        longitude: 9.93
+        radius_km: 200
+        entity_expiry_seconds: 300
+```
+
+### Entity IDs
+
+Vessels are published as `ais.<MMSI>`. Self-position (from GPS RMC sentences) is published as `ais.self.<tracker_id>`.
+
+---
+
+## ADS-B
+
+Aircraft tracking via the [adsb.lol](https://adsb.lol) public API. Supports four query modes.
+
+**Controller:** `adsblol`
+
+### By Location
+
+**Config key:** `adsblol.location.v0`
+
+Track all aircraft within a radius of a point.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `latitude` | number | yes | | Center latitude |
+| `longitude` | number | yes | | Center longitude |
+| `radius_nm` | number | | `50` | Search radius in nautical miles |
+| `interval_seconds` | number | | `5` | Polling interval in seconds |
+
+```yaml
+id: adsb-local
+config:
+    controller: adsblol
+    key: adsblol.location.v0
+    value:
+        latitude: 52.52
+        longitude: 13.40
+        radius_nm: 100
+```
+
+### All Military Aircraft
+
+**Config key:** `adsblol.military.v0`
+
+Track all military aircraft globally.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `interval_seconds` | number | | `5` | Polling interval in seconds |
+
+```yaml
+id: adsb-mil
+config:
+    controller: adsblol
+    key: adsblol.military.v0
+    value: {}
+```
+
+### By Callsign
+
+**Config key:** `adsblol.callsign.v0`
+
+Track a specific aircraft by callsign.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `callsign` | string | yes | | Aircraft callsign |
+| `interval_seconds` | number | | `5` | Polling interval in seconds |
+
+```yaml
+id: track-dlh123
+config:
+    controller: adsblol
+    key: adsblol.callsign.v0
+    value:
+        callsign: DLH123
+```
+
+### By ICAO Hex
+
+**Config key:** `adsblol.icao.v0`
+
+Track a specific aircraft by its ICAO hex address.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `icao` | string | yes | | ICAO hex address |
+| `interval_seconds` | number | | `5` | Polling interval in seconds |
+
+```yaml
+id: track-3c6753
+config:
+    controller: adsblol
+    key: adsblol.icao.v0
+    value:
+        icao: 3c6753
+```
+
+### Entity IDs
+
+Aircraft are published as `adsblol.<hex>`. Entity lifetime is `interval_seconds * 2`, so aircraft disappear if they stop reporting.
+
+---
+
+## ADS-B Enrichment
+
+Enriches existing aircraft entities with registration, owner, manufacturer, and model data from the ADS-B Exchange aircraft database.
+
+**Controller:** `adsbdb` | **Config key:** `adsbdb.enrich.v0`
+
+Watches for aircraft entities that have transponder data but no administrative data, looks them up in the database, and adds the information automatically.
+
+### Configuration
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | | adsb exchange URL | URL to `basic-ac-db.json.gz` database file |
+
+```yaml
+id: adsbdb-enrich
+config:
+    controller: adsbdb
+    key: adsbdb.enrich.v0
+    value: {}
+```
+
+The database is downloaded once at startup and held in memory.
+
+---
+
+## Hex DB
+
+Enriches aircraft entities with images and optionally administrative data from [hexdb.io](https://hexdb.io).
+
+**Controller:** `hexdb` | **Config key:** `hexdb.enrich.v0`
+
+Watches for aircraft entities with transponder data and resolves aircraft photos. The photos appear as camera components on the entity.
+
+### Configuration
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `url` | string | | `https://hexdb.io` | Base URL for the hexdb.io service |
+| `administrative` | boolean | | `false` | Also enrich with registration/owner/model data |
+
+```yaml
+id: hexdb-enrich
+config:
+    controller: hexdb
+    key: hexdb.enrich.v0
+    value: {}
+```
+
+---
+
+## ASTERIX
+
+Bidirectional EUROCONTROL ASTERIX CAT-62 (System Track Data) integration over UDP. Can receive radar tracks and convert them to entities, or watch entities and send them as ASTERIX tracks.
+
+**Controller:** `asterix`
+
+### Receiver
+
+**Config key:** `asterix.receiver.v0`
+
+Listens for ASTERIX data on a UDP port and converts tracks to entities.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `listen` | string | | `:8600` | UDP listen address |
+| `category` | number | | `62` | ASTERIX category to accept |
+| `source_prefix` | string | | entity ID | Prefix for generated entity IDs |
+
+```yaml
+id: radar-feed
+config:
+    controller: asterix
+    key: asterix.receiver.v0
+    value:
+        listen: ":8600"
+        category: 62
+```
+
+Entity IDs are formatted as `asterix.<source_prefix>.<trackNumber>`. Tracks expire 30 seconds after their last update.
+
+### Sender
+
+**Config key:** `asterix.sender.v0`
+
+Watches entities and sends them as ASTERIX CAT-62 tracks over UDP.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `address` | string | | `127.0.0.1:8600` | UDP destination address |
+| `category` | number | | `62` | ASTERIX category to encode |
+| `sac` | number | | `0` | System Area Code |
+| `sic` | number | | `1` | System Identification Code |
+
+```yaml
+id: asterix-out
+config:
+    controller: asterix
+    key: asterix.sender.v0
+    value:
+        address: "192.168.1.100:8600"
+        sac: 0
+        sic: 1
+```
+
+---
+
+## TAK / Cursor on Target
+
+Bidirectional CoT (Cursor on Target) gateway for ATAK, WinTAK, and iTAK. Provides both a TCP server that TAK clients connect to and a UDP multicast broadcaster.
+
+**Controller:** `tak`
+
+### TCP Server
+
+**Config key:** `cot.server.v0`
+
+Runs a TAK-compatible TCP server. TAK clients connect to this server to receive the full situational awareness picture and can push their own positions back.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `listen` | string | | `:8088` | TCP listen address |
+
+```yaml
+id: tak-server
+config:
+    controller: tak
+    key: cot.server.v0
+    value:
+        listen: ":8088"
+```
+
+To connect from ATAK: Settings > Network Preferences > TAK Servers > Add > enter the Hydris host IP, select TCP on port 8088.
+
+### Multicast
+
+**Config key:** `cot.multicast.v0`
+
+Broadcasts entities as CoT XML on a UDP multicast group. This is ATAK's "SA Mesh" mode - all devices on the same network see the picture automatically.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `address` | string | | `239.2.3.1:6969` | UDP multicast address |
+| `max_rate_hz` | number | | unlimited | Maximum entity update rate |
+
+```yaml
+id: tak-mesh
+config:
+    controller: tak
+    key: cot.multicast.v0
+    value:
+        address: "239.2.3.1:6969"
+```
+
+### Entity IDs
+
+Entities received from TAK clients are prefixed with `tak.`. MIL-STD-2525C symbols are translated to/from CoT type codes automatically.
+
+---
+
+## Meshtastic
+
+Bridges Hydris with Meshtastic LoRa mesh radios over USB serial. Receives position reports, ATAK PLI, telemetry, and text messages from the mesh network. Can also send entities out over the mesh in multiple formats.
+
+**Controller:** `meshtastic` | **Config key:** `meshtastic.usb.v0`
+
+Meshtastic radios are auto-discovered when plugged in via USB (requires the `--allow-local-serial` flag). The integration handles the full radio handshake, channel configuration, and packet framing.
+
+### Configuration
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `channel` | integer | | `0` | Meshtastic channel index for sending |
+| `hop_limit` | integer | | `3` | Maximum hop count for transmitted packets |
+| `send_format` | string | | (empty) | Outbound format: empty = receive only, `cot` = CoT XML via fountain codes, `pli` = TAK PLI, `hydris` = compressed protobuf |
+
+### Example
+
+```yaml
+id: mesh-radio
+config:
+    controller: meshtastic
+    key: meshtastic.usb.v0
+    value:
+        channel: 0
+        hop_limit: 3
+        send_format: cot
+```
+
+### Send Formats
+
+| Format | Protocol | Best For |
+|---|---|---|
+| *(empty)* | Receive only | Monitoring a mesh network without transmitting |
+| `cot` | CoT XML with fountain coding on `PORT_TAK_FORWARDER` | Interop with ATAK Meshtastic plugin, larger entities |
+| `pli` | TAK PLI protobuf on `PORT_TAK` | Compact position-only updates for ATAK |
+| `hydris` | Compressed protobuf on `PORT_HYDRIS` | Hydris-to-Hydris mesh links, max 231 bytes per entity |
+
+### What Gets Received
+
+- **ATAK PLI** (`PORT_TAK`) - Positions from the ATAK Meshtastic plugin
+- **ATAK CoT** (`PORT_TAK_FORWARDER`) - Full CoT entities via fountain-coded reassembly
+- **Meshtastic positions** (`PORT_POSITION`) - Native Meshtastic node positions
+- **Telemetry** (`PORT_TELEMETRY`) - Battery level and voltage as power components
+- **Node info** (`PORT_NODEINFO`) - Maps node numbers to callsigns
+- **Hydris entities** (`PORT_HYDRIS`) - Native Hydris protobuf entities from other nodes
+
+All received entities include link quality metadata (RSSI, SNR) and are prefixed with `meshtastic.`.
+
+### Device Discovery
+
+On Linux, macOS, and Windows, Meshtastic radios are auto-discovered by USB vendor ID (Adafruit/RAK, Espressif/Heltec). On Android, devices are matched via the platform USB API. The `--allow-local-serial` flag must be set for USB discovery.
+
+---
+
+## Space Track
+
+Satellite tracking using Two-Line Element (TLE) sets and SGP4 propagation. Supports inline TLE data or fetching from a URL. Generates real-time position entities and orbit ground-track geometry.
+
+**Controller:** `spacetrack` | **Config key:** `spacetrack.orbit.v0`
+
+### Configuration
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tle` | string | yes | | TLE data (inline) or URL to a TLE file |
+| `id` | string | | config entity ID | Custom base entity ID |
+| `label` | string | | TLE satellite name | Display label |
+| `symbol` | string | | `SNPPS-----*****` | MIL-STD-2525C symbol |
+| `interval` | number | | `1` | Position update interval in seconds |
+| `orbit_interval` | number | | `60` | Orbit ground-track update interval in seconds |
+| `tle_refresh_seconds` | number | | `3600` | How often to re-fetch TLEs from URL |
+| `username` | string | | | Basic auth username for TLE URL |
+| `password` | string | | | Basic auth password for TLE URL |
+
+### Example: Track by URL
+
+```yaml
+id: kuiper-constellation
+config:
+    controller: spacetrack
+    key: spacetrack.orbit.v0
+    value:
+        tle: https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=kuiper&FORMAT=tle
+```
+
+### Example: Inline TLE
+
+```yaml
+id: starlink-2511
+config:
+    controller: spacetrack
+    key: spacetrack.orbit.v0
+    value:
+        label: Starlink 2511
+        tle: |
+            1 48332U 21036BJ  26008.30093631  .01564128  18636-2  14068-2 0  9997
+            2 48332  53.0399 337.5810 0008348 116.0415 244.1481 16.12439623259422
+```
+
+URL sources can contain multiple TLEs - each satellite gets its own entity. Position uncertainty grows with TLE age (baseline 1km + 1.5km per day).
+
+---
+
+## Federation
+
+Replicates entities between Hydris nodes over gRPC. Supports push (local to remote) and pull (remote to local) modes. Optionally tunnels through an inline WireGuard VPN.
+
+**Controller:** `federation`
+
+### Push
+
+**Config key:** `federation.push.v0`
+
+Watches local entities and pushes them to a remote Hydris node.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `target` | string | yes | | Remote Hydris server address (e.g. `192.168.1.50:50051`) |
+| `filter` | object | | | Entity filter (see below) |
+| `limiter` | object | | | Rate limiting (see below) |
+| `wireguard` | object | | | WireGuard tunnel config (see below) |
+
+```yaml
+id: push-to-hq
+config:
+    controller: federation
+    key: federation.push.v0
+    value:
+        target: "10.0.0.1:50051"
+```
+
+### Pull
+
+**Config key:** `federation.pull.v0`
+
+Watches a remote Hydris node and pulls entities to the local node.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `source` | string | yes | | Remote Hydris server address |
+| `filter` | object | | | Entity filter |
+| `limiter` | object | | | Rate limiting |
+| `wireguard` | object | | | WireGuard tunnel config |
+
+```yaml
+id: pull-from-sensor-node
+config:
+    controller: federation
+    key: federation.pull.v0
+    value:
+        source: "10.0.0.2:50051"
+```
+
+### Filter Object
+
+```yaml
+filter:
+    id: "sensor-*"          # Filter by entity ID
+    label: "Radar"          # Filter by label
+    component: [4, 27]      # Filter by component field numbers
+```
+
+### Limiter Object
+
+```yaml
+limiter:
+    max_rate_hz: 10         # Maximum updates per second
+    min_priority: 1         # Minimum entity priority
+    keepalive_interval_ms: 30000
+```
+
+### WireGuard Tunnel
+
+Federation can tunnel through an inline WireGuard VPN - no external WireGuard setup needed.
+
+```yaml
+wireguard:
+    private_key: "your-wg-private-key"
+    peer_public_key: "peer-wg-public-key"
+    endpoint: "203.0.113.1:51820"
+    address: "10.0.0.1/24"
+```
+
+### Loop Prevention
+
+Federation automatically detects the remote node's identity and skips entities that originated from that node, preventing replication loops. Config entities and entities without an expiry time are never replicated.
+
+---
+
+## Cameras
+
+Cameras are not a controller integration - they are entity components. Any entity with a `camera` component and a `geo` component will appear as a camera on the map.
+
+Supported protocols: **MJPEG**, **HLS**, and **static images**.
+
+```yaml
+id: port-camera
+label: Harbor View
+geo:
+    latitude: 53.557
+    longitude: 9.795
+symbol:
+    milStd2525C: SFGPE-----
+camera:
+    cameras:
+        - label: Main Feed
+          protocol: CameraProtocolHls
+          url: https://example.com/stream.m3u8
+        - label: Snapshot
+          protocol: CameraProtocolImage
+          url: https://example.com/snapshot.jpg
+```
+
+Multiple camera feeds can be attached to a single entity. Protocol values: `CameraProtocolMjpeg`, `CameraProtocolHls`, `CameraProtocolImage`.
