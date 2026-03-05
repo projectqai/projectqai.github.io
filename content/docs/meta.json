@@ -2,13 +2,7 @@
   "title": "Documentation",
   "pages": [
     "index",
-    "entities",
-    "creating-entities",
-    "components",
-    "taskables",
-    "---Integrations---",
-    "builtins",
-    "integrating-mission-systems",
-    "connecting-downstreams"
+    "operator",
+    "developer"
   ]
 }

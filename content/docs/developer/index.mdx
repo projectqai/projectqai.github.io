@@ -1,0 +1,222 @@
+---
+title: Getting Started
+description: Build integrations with the Hydris API
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+If you haven't installed Hydris yet, follow the [installation instructions](/docs#installing) first.
+
+## Quick Start
+
+
+Pre-built client libraries are available for common languages:
+
+<Tabs items={['TypeScript', 'Python', 'Go', 'Rust']}>
+  <Tab value="TypeScript">
+    ```bash
+    mkdir hydris-example && cd hydris-example
+    bun init -y
+    bun add @projectqai/proto @bufbuild/protobuf @connectrpc/connect @connectrpc/connect-web
+    ```
+
+    Create `index.ts`:
+
+    ```typescript
+    import { EntitySchema, WorldService } from "@projectqai/proto/world";
+    import { create } from "@bufbuild/protobuf";
+    import { createClient } from "@connectrpc/connect";
+    import { createConnectTransport } from "@connectrpc/connect-web";
+
+    // Create an entity
+    const entity = create(EntitySchema, {
+      id: "sensor-1",
+      geo: {
+        latitude: 52.52,
+        longitude: 13.40,
+        altitude: 100
+      },
+      symbol: {
+        milStd2525C: "SFGPES----"
+      }
+    });
+
+    // Connect to Hydris and push the entity
+    const transport = createConnectTransport({
+      baseUrl: "http://localhost:50051"
+    });
+    const client = createClient(WorldService, transport);
+
+    const response = await client.push({
+      changes: [entity]
+    });
+    ```
+
+    Run it:
+
+    ```bash
+    bun run index.ts
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```bash
+    mkdir hydris-example && cd hydris-example
+    uv init
+    uv add grpcio protobuf
+    uv pip install git+https://github.com/projectqai/proto.git#subdirectory=python
+    ```
+
+    Create `main.py`:
+
+    ```python
+    import grpc
+    from platform_proto.world_pb2 import Entity, EntityChangeRequest, \
+        GeoSpatialComponent, SymbolComponent
+    from platform_proto.world_pb2_grpc import WorldServiceStub
+
+    entity = Entity(
+        id='sensor-1',
+        geo=GeoSpatialComponent(
+            latitude=52.52,
+            longitude=13.40,
+            altitude=100
+        ),
+        symbol=SymbolComponent(
+            milStd2525C='SFGPES----'
+        )
+    )
+
+    # Connect to Hydris and push the entity
+    channel = grpc.insecure_channel('localhost:50051')
+    client = WorldServiceStub(channel)
+
+    response = client.Push(EntityChangeRequest(changes=[entity]))
+    ```
+
+    Run it:
+
+    ```bash
+    uv run main.py
+    ```
+  </Tab>
+  <Tab value="Go">
+    ```bash
+    mkdir hydris-example && cd hydris-example
+    go mod init hydris-example
+    go get google.golang.org/grpc
+    go get github.com/projectqai/proto/go
+    ```
+
+    Create `main.go`:
+
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        pb "github.com/projectqai/proto/go"
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/credentials/insecure"
+    )
+
+    func main() {
+        altitude := 100.0
+        entity := &pb.Entity{
+            Id: "sensor-1",
+            Geo: &pb.GeoSpatialComponent{
+                Latitude:  52.52,
+                Longitude: 13.40,
+                Altitude:  &altitude,
+            },
+            Symbol: &pb.SymbolComponent{
+                MilStd2525C: "SFGPES----",
+            },
+        }
+
+        // Connect to Hydris and push the entity
+        conn, _ := grpc.NewClient("localhost:50051",
+            grpc.WithTransportCredentials(insecure.NewCredentials()))
+        client := pb.NewWorldServiceClient(conn)
+
+        response, _ := client.Push(context.Background(),
+            &pb.EntityChangeRequest{Changes: []*pb.Entity{entity}})
+        fmt.Println(response)
+    }
+    ```
+
+    Run it:
+
+    ```bash
+    go run main.go
+    ```
+  </Tab>
+  <Tab value="Rust">
+    ```bash
+    cargo init hydris-example && cd hydris-example
+    cargo add hydris tonic prost prost-types tokio --features tokio/macros,tokio/rt-multi-thread
+    ```
+
+    Create `src/main.rs`:
+
+    ```rust
+    use hydris::world::*;
+    use hydris::world::world_service_client::WorldServiceClient;
+
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let entity = Entity {
+            id: "sensor-1".into(),
+            geo: Some(GeoSpatialComponent {
+                longitude: 13.40,
+                latitude: 52.52,
+                altitude: Some(100.0),
+                covariance: None,
+            }),
+            symbol: Some(SymbolComponent {
+                mil_std2525_c: "SFGPES----".into(),
+            }),
+            ..Default::default()
+        };
+
+        // Connect to Hydris and push the entity
+        let mut client = WorldServiceClient::connect("http://localhost:50051").await?;
+
+        let response = client.push(EntityChangeRequest {
+            changes: vec![entity],
+            replacements: vec![],
+        }).await?;
+
+        println!("Accepted: {}", response.into_inner().accepted);
+        Ok(())
+    }
+    ```
+
+    Run it:
+
+    ```bash
+    cargo run
+    ```
+  </Tab>
+</Tabs>
+
+Hydris uses [Protocol Buffers](https://protobuf.dev/) over gRPC. The canonical `.proto` files and the full API surface are at [github.com/projectqai/proto](https://github.com/projectqai/proto) - if you are an LLM or experienced developer, just read the proto files directly, they are well annotated.
+## Core Concepts
+
+<Cards>
+  <Card title="Understanding Entities" href="/docs/developer/entities">
+    Learn about Hydris's Entity Component System and how entities work
+  </Card>
+  <Card title="Creating Entities" href="/docs/developer/creating-entities">
+    Create and push entities with examples in TypeScript, Python, and Go
+  </Card>
+  <Card title="Taskables" href="/docs/developer/taskables">
+    Coordinate actions across systems with executable tasks
+  </Card>
+  <Card title="Component Reference" href="/docs/developer/components">
+    Detailed documentation of all available components
+  </Card>
+  <Card title="Integrating Mission Systems" href="/docs/developer/integrating-mission-systems">
+    Connect your system to Hydris's situational awareness picture
+  </Card>
+</Cards>

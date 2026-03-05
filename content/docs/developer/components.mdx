@@ -9,19 +9,19 @@ Components define the capabilities and attributes of entities. This page documen
 
 ## Core Metadata Components
 
-### ControllerRef
+### Controller
 
 Identifies which system contributed this entity to the common operating picture.
 
 **Fields:**
 - `id` (string) - Unique identifier of the controlling system
-- `name` (string) - Human-readable name of the controller
+- `node` (string) - Node where the controller runs
 
 **Example:**
 ```typescript
 controller: {
   id: 'sensor-array-alpha',
-  name: 'Northern Sensor Network'
+  node: 'edge-node-1'
 }
 ```
 
@@ -34,14 +34,16 @@ controller: {
 Defines the temporal validity of an entity. Hydris automatically expires entities when `until` is reached.
 
 **Fields:**
-- `from` (Timestamp, optional) - When this entity becomes valid
+- `from` (Timestamp, optional) - When this entity becomes valid. Set to now automatically if omitted
 - `until` (Timestamp, optional) - When this entity expires
+- `fresh` (Timestamp, optional) - Last time this entity was seen. Updates with an older `fresh` value are ignored by default
 
 **Example:**
 ```typescript
 lifetime: {
   from: new Date('2025-01-15T10:00:00Z'),
-  until: new Date('2025-01-15T18:00:00Z')
+  until: new Date('2025-01-15T18:00:00Z'),
+  fresh: new Date('2025-01-15T12:00:00Z')
 }
 ```
 
@@ -74,6 +76,26 @@ priority: Priority.PriorityImmediate
 
 ---
 
+### Lease
+
+Used by controllers to negotiate exclusivity on an entity. The engine rejects pushes that attempt to change the holder of an active lease.
+
+**Fields:**
+- `controller` (string) - Controller ID holding the lease
+- `expires` (Timestamp, optional) - When the lease expires
+
+**Example:**
+```typescript
+lease: {
+  controller: 'tracker-1',
+  expires: new Date('2025-01-15T10:05:00Z')
+}
+```
+
+**When to use:** Lock an entity so only one controller can modify it at a time. Note that leases are local and not distributed vertically.
+
+---
+
 ## Spatial Components
 
 ### GeoSpatialComponent
@@ -81,16 +103,16 @@ priority: Priority.PriorityImmediate
 Physical location in 3D space using WGS84 coordinates.
 
 **Fields:**
-- `latitude` (double) - Decimal degrees, -90 to 90
 - `longitude` (double) - Decimal degrees, -180 to 180
+- `latitude` (double) - Decimal degrees, -90 to 90
 - `altitude` (double, optional) - Meters above WGS84 ellipsoid
 - `covariance` (CovarianceMatrix, optional) - Position uncertainty in ENU frame
 
 **Example:**
 ```typescript
 geo: {
-  latitude: 52.5200,
   longitude: 13.4050,
+  latitude: 52.5200,
   altitude: 100,
   covariance: {
     mxx: 25.0,   // East variance (m²)
@@ -106,11 +128,11 @@ geo: {
 
 ### BearingComponent
 
-Directional vector for entities that point or move in a direction.
+Absolute bearing in the world, relative to the local ENU frame. For root entities this is set directly; for child entities with a PolarOffset the engine computes it by composing down the pose tree.
 
 **Fields:**
-- `azimuth` (double, optional) - Horizontal angle in degrees (0-360), where 0 is North
-- `elevation` (double, optional) - Vertical angle in degrees (-90 to 90)
+- `azimuth` (double, optional) - Clockwise angle from true north in degrees [0, 360)
+- `elevation` (double, optional) - Angle above the local horizontal plane in degrees [-90, 90]
 
 **Example:**
 ```typescript
@@ -130,24 +152,86 @@ bearing: {
 
 ### OrientationComponent
 
-3D attitude of an entity using a quaternion, with optional angular rates.
+Absolute orientation in the world, relative to the local ENU frame. For root entities this is set directly; for child entities the engine computes it by composing orientations down the pose tree.
 
 **Fields:**
-- `orientation` (Quaternion, optional) - Orientation as a unit quaternion (x, y, z, w)
+- `orientation` (Quaternion) - Orientation as a unit quaternion (x, y, z, w)
 - `covariance` (CovarianceMatrix, optional) - Orientation uncertainty
-- `roll_rate` (double, optional) - Roll rate in radians/second (body frame)
-- `pitch_rate` (double, optional) - Pitch rate in radians/second (body frame)
-- `yaw_rate` (double, optional) - Yaw rate in radians/second (body frame)
 
 **Example:**
 ```typescript
 orientation: {
   orientation: { x: 0, y: 0, z: 0.383, w: 0.924 },
-  yaw_rate: 0.1
 }
 ```
 
 **When to use:** Aircraft, drones, or vehicles where full 3D attitude matters beyond simple bearing.
+
+---
+
+### PoseComponent
+
+Defines this entity's position relative to a parent entity's coordinate frame, forming a transform tree. The engine computes absolute GeoSpatialComponent by walking the tree. If the pose cannot be fully resolved (e.g. missing range on a bearing-only sensor), no geo is produced.
+
+**Fields:**
+- `parent` (string) - Parent entity ID in the transform tree
+- `cartesian` (CartesianOffset) - Offset in meters (east, north, up)
+- `polar` (PolarOffset) - Offset in azimuth/elevation/range
+
+Only one of `cartesian` or `polar` can be set.
+
+**CartesianOffset fields:**
+- `east_m` (double) - East offset in meters
+- `north_m` (double) - North offset in meters
+- `up_m` (double, optional) - Up offset in meters
+- `covariance` (CovarianceMatrix, optional) - Offset uncertainty
+- `orientation` (Quaternion, optional) - Local orientation
+
+**PolarOffset fields:**
+- `azimuth` (double) - Angle from the parent's forward axis in degrees [0, 360)
+- `elevation` (double, optional) - Above the parent's horizontal plane in degrees [-90, 90]
+- `range` (double, optional) - Distance in meters. Omit for bearing-only (passive sensor)
+- `covariance` (CovarianceMatrix, optional) - Offset uncertainty
+- `orientation` (Quaternion, optional) - Local orientation
+
+**Example:**
+```typescript
+pose: {
+  parent: 'radar-1',
+  polar: {
+    azimuth: 45.0,
+    elevation: 10.0,
+    range: 5000
+  }
+}
+```
+
+**When to use:** Sensor detections relative to a sensor, camera gimbal joints, or any entity whose position is naturally defined relative to another entity.
+
+---
+
+### TargetPoseComponent
+
+Desired pose for a joint, same shape as PoseComponent's offset. A device-specific reconciler continuously drives the actual PoseComponent toward this target.
+
+**Fields:**
+- `cartesian` (CartesianOffset) - Target offset in meters
+- `polar` (PolarOffset) - Target offset in azimuth/elevation/range
+
+Only one of `cartesian` or `polar` can be set.
+
+**Example:**
+```typescript
+target_pose: {
+  polar: {
+    azimuth: 180.0,
+    elevation: -5.0,
+    range: 1000
+  }
+}
+```
+
+**When to use:** Commanding a PTZ camera gimbal, robotic arm, or any actuated joint to move to a target position.
 
 ---
 
@@ -184,6 +268,26 @@ symbol: {
 
 ---
 
+### InteractivityComponent
+
+UI interaction hints for an entity, such as a custom icon or a reference URL where a user can learn more.
+
+**Fields:**
+- `icon` (string, optional) - Icon name (use Lucide icon names for max compatibility)
+- `reference_url` (string, optional) - URL where a user can learn more about this entity
+
+**Example:**
+```typescript
+interactivity: {
+  icon: 'radio',
+  reference_url: 'https://example.com/asset/123'
+}
+```
+
+**When to use:** Entities that benefit from a custom icon in the UI or link to an external detail page.
+
+---
+
 ## Sensor and Detection Components
 
 ### DetectionComponent
@@ -210,23 +314,43 @@ detection: {
 
 ### TrackComponent
 
-Marks an entity as a fused track and optionally links to track history and prediction geometries.
+Marks an entity as a fused track and optionally links to track history, prediction geometries, and contributing detections.
 
 **Fields:**
 - `tracker` (string, optional) - ID of the tracker/fusion engine that owns this track
 - `history` (string, optional) - Entity ID of a GeoShapeComponent containing the track history
 - `prediction` (string, optional) - Entity ID of a GeoShapeComponent containing the predicted forward track
+- `detections` (string[], optional) - Detection entity IDs that contribute to this track
 
 **Example:**
 ```typescript
 track: {
   tracker: 'fusion-engine-1',
   history: 'track-42.history',
-  prediction: 'track-42.orbit'
+  prediction: 'track-42.orbit',
+  detections: ['det-1', 'det-2', 'det-3']
 }
 ```
 
 **When to use:** After correlating multiple detections from different sensors into a unified track. Link to history/prediction shape entities for trail and forecast visualization.
+
+---
+
+### SensorComponent
+
+Describes a sensor's coverage area by linking to GeoShapeComponent entities.
+
+**Fields:**
+- `coverage` (string[]) - Entity IDs of GeoShapeComponent entities that describe the sensor's coverage area
+
+**Example:**
+```typescript
+sensor: {
+  coverage: ['radar-1.coverage-left', 'radar-1.coverage-right']
+}
+```
+
+**When to use:** Radars, cameras, or any sensor where you want to visualize the coverage footprint on the map.
 
 ---
 
@@ -316,37 +440,65 @@ administrative: {
 
 ### CameraComponent
 
-Provides video feed URLs for visual observation.
+Provides video feed URLs and optical parameters for cameras and observation sensors.
 
 **Fields:**
-- `cameras` (array of Camera) - List of available camera feeds
+- `streams` (array of MediaStream) - List of available media streams
+- `focal_point` (string, optional) - If the camera is PTZ, the entity ID representing where this camera is looking. The device driver reconciles target_pose with physical actuation of the gimbal
+- `fov` (double, optional) - Horizontal field of view in degrees, centered on the entity's azimuth. For varifocal cameras, this is the current effective FOV
+- `range_min` (double, optional) - Minimum detection range in meters (blind zone)
+- `range_max` (double, optional) - Maximum detection range in meters
+- `fov_wide` (double, optional) - Horizontal FOV at widest zoom in degrees (varifocal cameras)
+- `fov_tele` (double, optional) - Horizontal FOV at max zoom in degrees (varifocal cameras)
 
-**Camera fields:**
-- `label` (string) - Display name for this feed
+**MediaStream fields:**
+- `label` (string) - Display name for this stream
 - `url` (string) - Streaming URL
-- `protocol` (CameraProtocol) - Streaming protocol type
+- `protocol` (MediaStreamProtocol) - Streaming protocol type
+- `role` (MediaStreamRole) - Stream role
+- `codec` (string) - Video codec (e.g. "H264", "H265")
+- `width` (int32, optional) - Resolution width in pixels
+- `height` (int32, optional) - Resolution height in pixels
 
-**CameraProtocol values:**
-- `CameraProtocolWebrtc` - WebRTC stream
-- `CameraProtocolHls` - HLS stream
-- `CameraProtocolMjpeg` - MJPEG stream
-- `CameraProtocolImage` - Static image URL
+**MediaStreamProtocol values:**
+- `MediaStreamProtocolWebrtc` - WebRTC stream
+- `MediaStreamProtocolHls` - HLS stream
+- `MediaStreamProtocolMjpeg` - MJPEG stream
+- `MediaStreamProtocolImage` - Static image URL
+- `MediaStreamProtocolIframe` - Embedded iframe
+- `MediaStreamProtocolRtsp` - RTSP stream
+
+**MediaStreamRole values:**
+- `MediaStreamRoleMain` - Primary high-resolution stream
+- `MediaStreamRoleSub` - Lower-resolution sub stream
+- `MediaStreamRoleSnapshot` - Still image capture
 
 **Example:**
 ```typescript
 camera: {
-  cameras: [
+  streams: [
     {
       label: 'Main View',
       url: 'https://camera.example.com/stream1',
-      protocol: CameraProtocol.CameraProtocolHls
+      protocol: MediaStreamProtocol.MediaStreamProtocolHls,
+      role: MediaStreamRole.MediaStreamRoleMain,
+      codec: 'H264',
+      width: 1920,
+      height: 1080
     },
     {
       label: 'Thermal',
       url: 'https://camera.example.com/thermal',
-      protocol: CameraProtocol.CameraProtocolMjpeg
+      protocol: MediaStreamProtocol.MediaStreamProtocolMjpeg,
+      role: MediaStreamRole.MediaStreamRoleSub
     }
-  ]
+  ],
+  focal_point: 'camera-1.target',
+  fov: 60.0,
+  range_min: 5,
+  range_max: 10000,
+  fov_wide: 90.0,
+  fov_tele: 3.5
 }
 ```
 
@@ -354,30 +506,68 @@ camera: {
 
 ---
 
+### CaptureComponent
+
+Raw payload capture from a device, for example LoRaWAN uplinks or UDP packets.
+
+**Fields:**
+- `payload` (bytes, optional) - Last raw payload received
+- `port` (uint32, optional) - Application-level port (e.g. LoRaWAN FPort, UDP port)
+- `content_type` (string, optional) - Content type hint (e.g. "application/octet-stream", "application/json")
+- `captured_by` (string, optional) - Entity ID of the device that captured this data
+- `captured_at` (Timestamp, optional) - When the payload was captured
+
+**Example:**
+```typescript
+capture: {
+  payload: new Uint8Array([0x01, 0x02, 0x03]),
+  port: 1,
+  content_type: 'application/octet-stream',
+  captured_by: 'lorawan-gw-1',
+  captured_at: new Date('2025-01-15T10:30:00Z')
+}
+```
+
+**When to use:** IoT/LPWAN devices, raw data ingestion pipelines, protocol decoding.
+
+---
+
 ## Task and Assignment
 
 ### TaskableComponent
 
-Defines an assignable task with context and assignees.
+Defines an assignable task with context, assignees, and a parameter schema.
 
 **Fields:**
 - `label` (string, optional) - Human-readable task description
 - `context` (array of TaskableContext) - Entities this task relates to
 - `assignee` (array of TaskableAssignee) - Entities assigned to execute this task
+- `schema` (Struct) - JSON schema describing the task parameters
+- `mode` (TaskableMode) - Execution mode
 
 **TaskableContext/TaskableAssignee fields:**
 - `entityId` (string, optional) - ID of referenced entity
+
+**TaskableMode values:**
+| Value | Description |
+|---|---|
+| `TaskableModeExclusive` | Only one execution at a time; a second RunTask while one is active is rejected |
+| `TaskableModeReconcile` | Like Exclusive, but a new RunTask replaces the current execution |
+| `TaskableModeSpawn` | Creates a new child entity per execution; multiple can run in parallel |
+| `TaskableModePriorityQueue` | Like Reconcile with a priority queue; the driver picks the highest-priority task |
 
 **Example:**
 ```typescript
 taskable: {
   label: 'View with Camera',
   context: [
-    { entityId: 'target-001' }  // What to look at
+    { entityId: 'target-001' }
   ],
   assignee: [
-    { entityId: 'camera-1' }    // Who should do it
-  ]
+    { entityId: 'camera-1' }
+  ],
+  schema: { type: 'object', properties: { zoom: { type: 'number' } } },
+  mode: TaskableMode.TaskableModeExclusive
 }
 ```
 
@@ -389,20 +579,59 @@ taskable: {
 
 ---
 
+### TaskExecutionComponent
+
+An instance of a task being executed. Created by RunTask, referencing a TaskableComponent entity as the definition. The controller that owns the taskable watches for these and executes them.
+
+**Fields:**
+- `task` (string) - Entity ID of the TaskableComponent that defines this task
+- `parameters` (Struct, optional) - Parameters supplied by the caller, validated against the taskable's schema
+- `state` (TaskExecutionState) - Current execution state
+- `reason` (string, optional) - Human-readable error or result message
+- `priority` (uint32, optional) - Priority level for PriorityQueue mode (higher = more important)
+
+**TaskExecutionState values:**
+| Value | Description |
+|---|---|
+| `TaskExecutionStatePending` | Waiting to start |
+| `TaskExecutionStateRunning` | Currently executing |
+| `TaskExecutionStateCompleted` | Finished successfully |
+| `TaskExecutionStateFailed` | Failed with error |
+
+**Example:**
+```typescript
+task_execution: {
+  task: 'taskable-view-camera',
+  parameters: { zoom: 10 },
+  state: TaskExecutionState.TaskExecutionStateRunning
+}
+```
+
+**When to use:** Automatically created by RunTask. Controllers watch for these on their taskable entities and execute accordingly.
+
+---
+
 ## Kinematics
 
 ### KinematicsComponent
 
-Velocity and acceleration in the local East-North-Up (ENU) coordinate frame.
+Velocity, acceleration, and angular velocity. Linear components use the local East-North-Up (ENU) coordinate frame.
 
 **Fields:**
 - `velocityEnu` (KinematicsEnu, optional) - Velocity vector in m/s
 - `accelerationEnu` (KinematicsEnu, optional) - Acceleration vector in m/s²
+- `angularVelocityBody` (AngularVelocity, optional) - Angular velocity around the entity's body axes
 
 **KinematicsEnu fields:**
 - `east` (double, optional) - East component in m/s (or m/s² for acceleration)
 - `north` (double, optional) - North component
 - `up` (double, optional) - Up component
+- `covariance` (CovarianceMatrix, optional) - Velocity/acceleration uncertainty
+
+**AngularVelocity fields:**
+- `roll_rate` (double) - Roll rate in radians/second
+- `pitch_rate` (double) - Pitch rate in radians/second
+- `yaw_rate` (double) - Yaw rate in radians/second
 
 The ENU frame is a right-handed Cartesian coordinate system with origin at the entity's position, where:
 - East axis: tangent to the latitude line, pointing eastward
@@ -423,6 +652,11 @@ kinematics: {
     east: 0.1,
     north: 0.0,
     up: 0.0
+  },
+  angularVelocityBody: {
+    roll_rate: 0.0,
+    pitch_rate: 0.0,
+    yaw_rate: 0.1   // Turning right
   }
 }
 ```
@@ -444,6 +678,7 @@ Defines geographic shapes beyond simple point locations.
 - `planar.point` - A single 2.5D point (longitude, latitude, optional altitude)
 - `planar.line` - A path/line defined by multiple points (ring)
 - `planar.polygon` - An enclosed area with optional holes
+- `planar.circle` - A circle defined by center point and radius
 
 **PlanarPoint fields:**
 - `longitude` (double) - Decimal degrees, -180 to 180
@@ -453,6 +688,11 @@ Defines geographic shapes beyond simple point locations.
 **PlanarPolygon fields:**
 - `outer` (PlanarRing) - The outer boundary (must be closed: first point = last point)
 - `holes` (array of PlanarRing, optional) - Interior holes
+
+**PlanarCircle fields:**
+- `center` (PlanarPoint) - Center point
+- `radius_m` (double) - Radius in meters
+- `inner_radius_m` (double, optional) - Inner radius in meters (omit for solid circle)
 
 **Example:**
 ```typescript
@@ -476,6 +716,37 @@ shape: {
 ```
 
 **When to use:** Zones, boundaries, flight corridors, no-fly areas, search areas.
+
+---
+
+### LocalShapeComponent
+
+Geometry defined in a local ENU frame relative to another entity, using meter offsets instead of geographic coordinates.
+
+**Fields:**
+- `relative_to` (string) - Entity ID whose frame this geometry is defined in
+- `geometry` (LocalGeometry, optional) - The local shape definition
+
+**LocalGeometry types:**
+- `point` - A single point (east_m, north_m, optional up_m)
+- `line` - A path defined by multiple local points
+- `polygon` - An enclosed area in local coordinates
+- `circle` - A circle with center in local coordinates and radius in meters
+
+**Example:**
+```typescript
+local_shape: {
+  relative_to: 'radar-1',
+  geometry: {
+    circle: {
+      center: { east_m: 0, north_m: 0, up_m: 0 },
+      radius_m: 5000
+    }
+  }
+}
+```
+
+**When to use:** Sensor coverage areas, exclusion zones around assets, or any geometry naturally defined relative to an entity rather than in absolute coordinates.
 
 ---
 
@@ -594,6 +865,9 @@ Communication link quality and status for an entity, typically set by radio or m
 - `rssi_dbm` (sint32, optional) - Received signal strength in dBm
 - `snr_db` (sint32, optional) - Signal-to-noise ratio in dB
 - `via` (string, optional) - Entity ID of the device managing the link
+- `last_latency_ms` (uint32, optional) - Last measured end-to-end latency in milliseconds
+- `avg_latency_ms` (uint32, optional) - Exponential moving average of latency in milliseconds
+- `last_seen` (Timestamp, optional) - Last time data was received over this link
 
 **LinkStatus values:**
 | Value | Description |
@@ -608,7 +882,9 @@ link: {
   status: LinkStatus.LinkStatusConnected,
   rssi_dbm: -85,
   snr_db: 12,
-  via: 'meshtastic.radio-1'
+  via: 'meshtastic.radio-1',
+  last_latency_ms: 250,
+  avg_latency_ms: 180
 }
 ```
 
@@ -642,49 +918,84 @@ power: {
 
 ### DeviceComponent
 
-Represents a physical or logical device in the device tree. Used internally by builtins to publish discovered hardware and advertise configurable capabilities.
+Represents a physical or logical device in the device tree. Describes hardware topology only - can be discovered automatically or created by hand.
 
 **Fields:**
-- `parent` (string, optional) - Parent device entity ID, forming the device tree
+- `parent` (string, optional) - Parent device entity ID, forming the device tree. Unset for root (node)
 - `composition` (string[], optional) - Non-direct ancestor entity IDs
-- `configurable` (Configurable[], optional) - Config keys this device accepts, with schemas
-- `unique_hardware_id` (string, optional) - Stable hardware identifier (e.g. USB serial number)
-- `labels` (map, optional) - Key-value labels for matching
+- `unique_hardware_id` (string, optional) - Stable hardware identifier (e.g. USB serial number, MAC address)
 - `state` (DeviceState) - `DeviceStatePending`, `DeviceStateActive`, or `DeviceStateFailed`
 - `error` (string, optional) - Error message if state is failed
+- `class` (string, optional) - Device class (e.g. "usb_serial", "radio", "camera")
+- `category` (string, optional) - Human-readable category for UI grouping (e.g. "Air", "Sea", "Network")
 - `node` (NodeDevice, optional) - Node descriptor (hostname, OS, arch, CPU count)
 - `usb` (UsbDevice, optional) - USB descriptor (VID, PID, manufacturer, product, serial)
 - `ip` (IpDevice, optional) - IP descriptor (host, port)
 - `serial` (SerialDevice, optional) - Serial descriptor (path, baud rate)
+- `ethernet` (EthernetDevice, optional) - Ethernet descriptor (MAC address, vendor)
+- `lpwan` (LPWANDevice, optional) - LPWAN descriptor (EUI, address)
 
-**When to use:** You generally don't create device entities directly. They are published by builtins like `serial` and `meshtastic` when hardware is discovered. Use ConfigurationComponent to configure discovered devices.
+**EthernetDevice fields:**
+- `mac_address` (string, optional) - MAC address in canonical colon-separated hex (e.g. "aa:bb:cc:dd:ee:ff")
+- `vendor` (string, optional) - Vendor name resolved from the OUI prefix
+
+**LPWANDevice fields:**
+- `eui` (string, optional) - IEEE 802 EUI-64 identifier (e.g. "a84041c6545d1429")
+- `address` (string, optional) - Network address assigned after join/activation (e.g. "012a7125")
+
+**When to use:** You generally don't create device entities directly. They are published by builtins like `serial` and `meshtastic` when hardware is discovered.
+
+---
+
+### ConfigurableComponent
+
+Presence of this component indicates a controller is managing this entity. It declares what can be configured and reports the controller's state. Always on the same entity as a DeviceComponent.
+
+**Fields:**
+- `schema` (Struct) - JSON schema describing accepted configuration
+- `value` (Struct) - Current state reported by the controller
+- `state` (ConfigurableState) - Current configurable state
+- `error` (string, optional) - Error message if state is failed
+- `label` (string, optional) - Human-readable label for the UI (e.g. "Defaults", "USB Device")
+- `applied_version` (uint64) - Echoed from ConfigurationComponent.version after the controller has finished processing
+- `supported_device_classes` (array of DeviceClassOption) - Device classes that can be attached underneath this entity
+- `scheduled_at` (Timestamp, optional) - When the controller will activate this entity
+
+**ConfigurableState values:**
+| Value | Description |
+|---|---|
+| `ConfigurableStateInactive` | Not active |
+| `ConfigurableStateStarting` | Starting up |
+| `ConfigurableStateActive` | Running normally |
+| `ConfigurableStateFailed` | Failed with error |
+| `ConfigurableStateConflict` | Configuration conflict |
+| `ConfigurableStateScheduled` | Scheduled for future activation |
+
+**When to use:** Published by controllers to advertise their configuration schema and report state. Users interact with this indirectly through ConfigurationComponent.
 
 ---
 
 ### ConfigurationComponent
 
-Activates a builtin integration by pointing a config at a controller and key. This is the primary way to configure Hydris.
+Configuration pushed onto an entity. The engine delivers entities with this component to the matching controller via Reconcile.
 
 **Fields:**
-- `controller` (string) - Name of the target controller (e.g. `ais`, `adsblol`, `tak`)
-- `key` (string) - Configuration key (e.g. `ais.stream.v0`)
 - `value` (Struct) - Configuration values as a JSON object
-- `selector` (EntityFilter, optional) - Target a specific device or subset of devices. If empty, applies to all devices from this controller that advertise this key.
+- `version` (uint64) - Monotonically increasing counter. The controller echoes this back in ConfigurableComponent.applied_version once processed
 
 **Example:**
 ```typescript
 config: {
-  controller: 'ais',
-  key: 'ais.stream.v0',
   value: {
     host: '153.44.253.27',
     port: 5631,
     entity_expiry_seconds: 300
-  }
+  },
+  version: 1
 }
 ```
 
-**When to use:** Activating and configuring builtin integrations. See the [Builtin Integrations](/docs/builtins) reference for all available config keys.
+**When to use:** Activating and configuring builtin integrations. See the [Builtin Integrations](/docs/operator/builtins) reference for all available config keys.
 
 ---
 
@@ -699,7 +1010,7 @@ config: {
 
 **Sensor Station:**
 ```typescript
-{ id, geo, symbol, bearing, camera }
+{ id, geo, symbol, bearing, camera, sensor }
 ```
 
 **Detection:**
@@ -732,6 +1043,12 @@ config: {
 { id, label, shape, symbol }
 ```
 
+**PTZ Camera with Gimbal:**
+```typescript
+{ id, geo, symbol, camera, bearing }
+// + child entity with pose (relative to camera) and target_pose
+```
+
 **Task Assignment:**
 ```typescript
 { id, taskable }
@@ -742,7 +1059,12 @@ config: {
 { id, config }
 ```
 
+**IoT Device:**
+```typescript
+{ id, geo, capture, link, power }
+```
+
 ## Next Steps
 
-- [Creating Entities](/docs/creating-entities) - Learn how to create entities with components
-- [Understanding Entities](/docs/entities) - Learn about the Entity Component System
+- [Creating Entities](/docs/developer/creating-entities) - Learn how to create entities with components
+- [Understanding Entities](/docs/developer/entities) - Learn about the Entity Component System

@@ -1,0 +1,54 @@
+---
+title: Downstreams
+description: Share the situational awareness picture with ATAK, WinTAK, or iTAK
+---
+
+## What is a BMS?
+
+A **Situational Awareness Tool** is a tactical software platform used for command and control, situational awareness, and coordination in military, emergency response and other team operations. BMS platforms display real-time positioning, sensor data, and mission-critical information on a common operating picture.
+
+In the open source version of Hydris, we support integration with **ATAK (Android Team Awareness Kit)**, a widely-used tactical awareness platform. Hydris can broadcast its situational awareness picture to ATAK, allowing teams to visualize entities, detections, and tracks directly within their ATAK clients for Android, Windows and iPhone.
+
+For other systems, such as Sitaware, Delta, please contact sales.
+
+## Adding a TAK Connection
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K` on macOS) and select **Configuration**
+2. Navigate to **Network → TAK**
+3. Click **+ Add**
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-add-tak.png" alt="TAK configuration showing connection options" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+You can choose from several connection modes:
+
+- **TCP Server** — Hydris runs a TAK server that ATAK clients connect to. Works across different networks and NAT boundaries.
+- **TCP Client** — Hydris connects to an existing TAK server as a client.
+- **UDP Send / UDP Receive** — Send or receive over UDP unicast.
+- **Multicast** — Broadcasts to the SA Mesh network. Requires Hydris and ATAK clients to be on the same L2 network.
+
+### Connecting ATAK to hydris TAK TCP Server
+
+After creating a TCP Server in Hydris:
+
+1. Open ATAK on your device
+2. Navigate to **Settings → Network Preferences → TAK Servers**
+3. Press **⋮** (top right) → **Add**
+4. Enter the IP address of the device running Hydris
+5. Under Advanced Options, select **TCP** as the streaming protocol
+6. Save and connect
+
+ATAK will now receive real-time entity updates from Hydris and display them on the map.
+
+## What Gets Shared
+
+When connected to ATAK, Hydris automatically shares:
+
+- **Entities with geospatial components** — All entities with position data appear on the ATAK map
+- **Symbols** — MIL-STD-2525C symbols are translated to ATAK's symbol format
+- **Tracks** — Fused tracks from multiple sensors
+- **Detections** — Raw sensor detections with bearing information
+- **Metadata** — Entity labels, classifications, and timestamps
+
+Only entities with `geo` components are visualized in ATAK — other entities remain in the awareness picture for programmatic access.

@@ -1,0 +1,9 @@
+{
+  "title": "Developer Guide",
+  "pages": [
+    "index",
+    "entities",
+    "components",
+    "integrating-mission-systems"
+  ]
+}

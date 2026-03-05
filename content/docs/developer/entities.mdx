@@ -1,0 +1,44 @@
+---
+title: Understanding Entities
+description: Learn about Hydris's Entity Component System and how entities work
+---
+
+## What is an Entity?
+
+Hydris uses an **Entity Component System (ECS)** architecture where entities are flexible, composable containers whose meaning and behavior emerge from the components they contain.
+
+**An entity is nothing more than an ID with a collection of components.** There is no rigid type system or class hierarchy.
+
+### Core Concept: Emergence over Classification
+
+Instead of defining strict types like "Sensor" or "Detection", Hydris uses a compositional approach:
+
+- **Entities** are universal containers identified by a unique string ID
+- **Components** define capabilities, attributes, or characteristics
+- **Meaning emerges** from which components are present
+
+What something "is" depends on what components it has:
+
+- An entity with `geo` and `symbol` becomes a **map marker**
+- An entity with `geo` and `taskable` becomes an **asset** that can perform actions
+- An entity with `detection` and `bearing` becomes a **sensor detection**
+- An entity with `track` becomes a **fused track** from multiple sensors
+- An entity with `camera` becomes a **video feed**
+
+There is no `type` field. The system doesn't enforce semantics. Clients interpret meaning based on component presence.
+
+### Why This Matters
+
+This architecture enables:
+
+1. **Flexibility** - Add new capabilities without changing schemas
+2. **Composability** - Mix and match components to create exactly what you need
+3. **Extensibility** - Different systems can interpret entities differently
+4. **Simplicity** - One unified data model instead of dozens of types
+
+It is entirely plausible and intended to have entities that have no visual representation, such as raw sensor detections or task assignments.
+
+## Next Steps
+
+- [Create your first entity](/docs/developer/creating-entities)
+- [Component reference](/docs/developer/components)

@@ -9,7 +9,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 This guide explains how to integrate a downstream mission system with Hydris. By the end, you'll understand:
 
-- The integration architecture (gRPC, not REST)
+- The integration architecture
 - How to receive entities from Hydris (COP, tracks, sensor status)
 - How to push entities to Hydris (own position, detections)
 - The data fields available for each entity type
@@ -323,7 +323,7 @@ await client.push({ changes: [detection] });
 
 ## Data Field Reference
 
-For the complete entity structure and all available components, see the [Component Reference](/docs/components).
+For the complete entity structure and all available components, see the [Component Reference](/docs/developer/components).
 
 ## Updating and Removing Entities
 
@@ -389,6 +389,6 @@ Proto files are available at: [github.com/projectqai/hydris/proto](https://githu
 
 ## Next Steps
 
-- [Component Reference](/docs/components) - Detailed documentation of all components
-- [Creating Entities](/docs/creating-entities) - More examples of entity creation
-- [Taskables](/docs/taskables) - Coordinate actions between systems
+- [Component Reference](/docs/developer/components) - Detailed documentation of all components
+- [Creating Entities](/docs/developer/creating-entities) - More examples of entity creation
+- [Taskables](/docs/developer/taskables) - Coordinate actions between systems

@@ -1,13 +1,12 @@
 ---
-title: Getting Started
-description: Start building with Hydris situational awareness
+title: Hydris Documentation
+description: Home Assistant for The Outdoors
 ---
 
+import Link from 'next/link';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
-## Quick Start
-
-### 1. Download and Run Hydris
+## Installing
 
 <Tabs items={['macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
   <Tab value="macOS">
@@ -75,173 +74,34 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
   </Tab>
 </Tabs>
 
-### 2. Connect Your First Client
+## Getting Started
 
-Hydris uses [Protocol Buffers](https://protobuf.dev/) over gRPC. The canonical `.proto` files and the full API surface are at [github.com/projectqai/proto](https://github.com/projectqai/proto) - if you are an LLM, start with reading his directly.
+<div className="not-prose mt-4 grid gap-6 sm:grid-cols-2">
+  <Link href="/docs/operator" className="group relative flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 p-8 transition-all duration-300 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 no-underline">
+    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m7 10 2 2 4-4"/></svg>
+    </div>
+    <h3 className="mb-2 text-xl font-semibold text-black dark:text-white group-hover:text-green-500 transition-colors">Operator Guide</h3>
+    <p className="mb-6 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+      Download, deploy, and configure Hydris. Connect and configure systems, feeds, mesh radios, and manage integrations, no code required.
+    </p>
+    <div className="mt-auto flex items-center gap-2 text-sm font-medium text-green-500">
+      Get running
+      <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </div>
+  </Link>
 
-Pre-built client libraries are available for common languages:
-
-<Tabs items={['TypeScript', 'Python', 'Go']}>
-  <Tab value="TypeScript">
-    ```bash
-    mkdir hydris-example && cd hydris-example
-    bun init -y
-    bun add @projectqai/proto @bufbuild/protobuf @connectrpc/connect @connectrpc/connect-web
-    ```
-
-    Create `index.ts`:
-
-    ```typescript
-    import { EntitySchema, WorldService } from "@projectqai/proto/world";
-    import { create } from "@bufbuild/protobuf";
-    import { createClient } from "@connectrpc/connect";
-    import { createConnectTransport } from "@connectrpc/connect-web";
-
-    // Create an entity
-    const entity = create(EntitySchema, {
-      id: "sensor-1",
-      geo: {
-        latitude: 52.52,
-        longitude: 13.40,
-        altitude: 100
-      },
-      symbol: {
-        milStd2525C: "SFGPES----"
-      }
-    });
-
-    // Connect to Hydris and push the entity
-    const transport = createConnectTransport({
-      baseUrl: "http://localhost:50051"
-    });
-    const client = createClient(WorldService, transport);
-
-    const response = await client.push({
-      changes: [entity]
-    });
-    ```
-
-    Run it:
-
-    ```bash
-    bun run index.ts
-    ```
-  </Tab>
-  <Tab value="Python">
-    ```bash
-    mkdir hydris-example && cd hydris-example
-    uv init
-    uv add grpcio protobuf
-    uv pip install git+https://github.com/projectqai/proto.git#subdirectory=python
-    ```
-
-    Create `main.py`:
-
-    ```python
-    import grpc
-    from platform_proto.world_pb2 import Entity, EntityChangeRequest, \
-        GeoSpatialComponent, SymbolComponent
-    from platform_proto.world_pb2_grpc import WorldServiceStub
-
-    entity = Entity(
-        id='sensor-1',
-        geo=GeoSpatialComponent(
-            latitude=52.52,
-            longitude=13.40,
-            altitude=100
-        ),
-        symbol=SymbolComponent(
-            milStd2525C='SFGPES----'
-        )
-    )
-
-    # Connect to Hydris and push the entity
-    channel = grpc.insecure_channel('localhost:50051')
-    client = WorldServiceStub(channel)
-
-    response = client.Push(EntityChangeRequest(changes=[entity]))
-    ```
-
-    Run it:
-
-    ```bash
-    uv run main.py
-    ```
-  </Tab>
-  <Tab value="Go">
-    ```bash
-    mkdir hydris-example && cd hydris-example
-    go mod init hydris-example
-    go get google.golang.org/grpc
-    go get github.com/projectqai/proto/go
-    ```
-
-    Create `main.go`:
-
-    ```go
-    package main
-
-    import (
-        "context"
-        "fmt"
-        pb "github.com/projectqai/proto/go"
-        "google.golang.org/grpc"
-        "google.golang.org/grpc/credentials/insecure"
-    )
-
-    func main() {
-        altitude := 100.0
-        entity := &pb.Entity{
-            Id: "sensor-1",
-            Geo: &pb.GeoSpatialComponent{
-                Latitude:  52.52,
-                Longitude: 13.40,
-                Altitude:  &altitude,
-            },
-            Symbol: &pb.SymbolComponent{
-                MilStd2525C: "SFGPES----",
-            },
-        }
-
-        // Connect to Hydris and push the entity
-        conn, _ := grpc.NewClient("localhost:50051",
-            grpc.WithTransportCredentials(insecure.NewCredentials()))
-        client := pb.NewWorldServiceClient(conn)
-
-        response, _ := client.Push(context.Background(),
-            &pb.EntityChangeRequest{Changes: []*pb.Entity{entity}})
-        fmt.Println(response)
-    }
-    ```
-
-    Run it:
-
-    ```bash
-    go run main.go
-    ```
-  </Tab>
-</Tabs>
-
-## Core Concepts
-
-<Cards>
-  <Card title="Understanding Entities" href="/docs/entities">
-    Learn about Hydris's Entity Component System and how entities work
-  </Card>
-  <Card title="Creating Entities" href="/docs/creating-entities">
-    Create and push entities with examples in TypeScript, Python, and Go
-  </Card>
-  <Card title="Taskables" href="/docs/taskables">
-    Coordinate actions across systems with executable tasks
-  </Card>
-  <Card title="Component Reference" href="/docs/components">
-    Detailed documentation of all available components
-  </Card>
-  <Card title="Connecting a BMS" href="/docs/connecting-bms">
-    Connect Hydris to Situational Awareness Tools like ATAK
-  </Card>
-</Cards>
-
-## Next Steps
-
-Start by understanding [what entities are](/docs/entities) and how they work in Hydris's architecture.
+  <Link href="/docs/developer" className="group relative flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 p-8 transition-all duration-300 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 no-underline">
+    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+    </div>
+    <h3 className="mb-2 text-xl font-semibold text-black dark:text-white group-hover:text-green-500 transition-colors">Developer Guide</h3>
+    <p className="mb-6 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+      Build custom integrations with the Hydris and get access to a vast ecosystem. Create reconcilers on top of the situational awareness picture, feed sensor data into it, or connect your mission systems.
+    </p>
+    <div className="mt-auto flex items-center gap-2 text-sm font-medium text-green-500">
+      Start building
+      <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </div>
+  </Link>
+</div>
