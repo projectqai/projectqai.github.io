@@ -6,6 +6,7 @@
     "connecting-downstreams",
     "layouts",
     "map",
-    "meshtastic"
+    "meshtastic",
+    "cameras"
   ]
 }

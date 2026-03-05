@@ -1,0 +1,39 @@
+---
+title: Cameras
+description: Integrate IP cameras for live video feeds and map awareness
+---
+
+Hydris can integrate IP cameras to provide live video feeds and visualize camera coverage on the map. Currently, only **Reolink** cameras are supported.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-camera-map.png" alt="Camera entity on the map with video feeds in the detail panel" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+## Auto-Detection
+
+Cameras are automatically discovered on the network when they have **ONVIF** and Reolink's **HTTP API** enabled. No manual setup is required beyond enabling those endpoints in the reolink app. Detected cameras appear as entities in Hydris immediately.
+
+Once detected, the camera is placed on the map at 0,0 (null island). You should configure its actual geographic position so it appears in the correct location.
+
+## Configuration
+
+To configure a camera, select it in the entity list or on the map and click **Configure** in the detail panel. This opens the camera configuration with the following fields:
+
+| Field | Description |
+|-------|-------------|
+| **Username** | Override the username for this camera (leave empty for global default) |
+| **Password** | Override the password for this camera |
+| **Field of View** | Override horizontal field of view in degrees (0–360) |
+| **Range Min** | Blind zone distance in meters |
+| **Range Max** | Maximum detection range in meters |
+| **Heading** | Heading of the _base_ of the camera in degrees from north (0–360) |
+| **Latitude** | Camera latitude (-90–90) |
+| **Longitude** | Camera longitude (-180–180) |
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-camera-config.png" alt="Camera configuration panel showing position and field of view settings" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+When Field of View, Range, and Heading are either auto detected or configured, the camera displays a **detection cone** on the map along with a **focal point**, giving you a visual representation of what the camera is currently looking at.
+
+As a developer, you may also use [target poses](/docs/developer/components#targetposecomponent) to make the camera point somewhere else by changing its focal point.
