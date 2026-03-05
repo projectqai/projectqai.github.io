@@ -6,22 +6,17 @@ export default function HomePage() {
 		<main className="flex-1">
 			{/* Hero Section */}
 			<section className="relative min-h-screen flex items-center overflow-hidden bg-gray-50 dark:bg-black">
-				<div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-green-500/10 via-transparent to-transparent pointer-events-none" />
-				<div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02] pointer-events-none" />
-
-				{/* Floating Code Screenshot - Bottom Right */}
-				<div className="absolute right-12 bottom-0 translate-y-1/3 w-[40%] max-w-lg hidden lg:block opacity-60 dark:opacity-40 pointer-events-none z-20">
-					<div className="relative">
-						<div className="absolute inset-0 bg-green-500/10 blur-3xl"></div>
-						<Image
-							src="/entity_code.png"
-							alt="Simple entity code example"
-							width={800}
-							height={600}
-							className="w-full h-auto relative z-10"
-						/>
-					</div>
+				<div className="absolute inset-0 pointer-events-none">
+					<Image
+						src="/hero-bg.webp"
+						alt=""
+						fill
+						className="object-cover opacity-20 dark:opacity-30 md:opacity-60 md:dark:opacity-50"
+						priority
+					/>
 				</div>
+				<div className="absolute inset-0 bg-gradient-to-b from-gray-50/60 via-gray-50/80 to-gray-50 dark:from-black/60 dark:via-black/80 dark:to-black md:from-transparent md:via-gray-50/40 md:to-gray-50 md:dark:from-transparent md:dark:via-black/40 md:dark:to-black pointer-events-none" />
+
 
 				<div className="container mx-auto px-6 py-32 relative z-10">
 					<div className="max-w-4xl">

@@ -9,7 +9,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ### 1. Download and Run Hydris
 
-<Tabs items={['macOS', 'Windows', 'Raspberry Pi', 'Android', 'Docker']}>
+<Tabs items={['macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
   <Tab value="macOS">
     Download the [macOS binary](https://github.com/projectqai/hydris/releases/latest/) and run:
 
@@ -35,8 +35,8 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
     Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
-  <Tab value="Raspberry Pi">
-    Download the [ARM Linux binary](https://github.com/projectqai/hydris/releases/latest/):
+  <Tab value="Linux">
+    Download the [Linux binary](https://github.com/projectqai/hydris/releases/latest/) (x86_64 or ARM):
 
     ```bash
     chmod +x hydris
@@ -46,61 +46,51 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
     Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
   </Tab>
   <Tab value="Android">
-    Download the [APK](https://github.com/projectqai/hydris/releases/latest/) and install on your device.
-
-    **Sideloading with ADB:**
-
-    1. Enable Developer Options on your Android device:
-       - Go to Settings → About Phone
-       - Tap "Build Number" 7 times
-
-    2. Enable USB Debugging:
-       - Go to Settings → Developer Options
-       - Enable "USB Debugging"
-
-    3. Connect your device and install:
-       ```bash
-       adb install -r hydris.apk
-       ```
+    1. On your Android device, open [the latest release](https://github.com/projectqai/hydris/releases/latest/) in your browser
+    2. Download the `.apk` file
+    3. When prompted, allow installation from unknown sources
+    4. Tap the downloaded APK to install
   </Tab>
   <Tab value="Docker">
     Run Hydris using Docker:
 
     ```bash
-    docker run -p 50051:50051 -ti ghcr.io/projectqai/hydris:v0.0.14
+    docker run -p 50051:50051 -ti ghcr.io/projectqai/hydris:latest
+    ```
+
+    To persist world state across restarts, add a volume:
+
+    ```bash
+    docker run -p 50051:50051 -v hydris-data:/data -ti ghcr.io/projectqai/hydris:latest -w /data/world.yaml
     ```
 
     Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
+  </Tab>
+  <Tab value="Kubernetes">
+    Deploy Hydris to your cluster using the manifest from the repo:
+
+    ```bash
+    kubectl apply -f https://raw.githubusercontent.com/projectqai/hydris/main/scripts/deploy.yaml
+    ```
   </Tab>
 </Tabs>
 
 ### 2. Connect Your First Client
 
-Install the client libraries for your language:
+Hydris uses [Protocol Buffers](https://protobuf.dev/) over gRPC. The canonical `.proto` files and the full API surface are at [github.com/projectqai/proto](https://github.com/projectqai/proto) - if you are an LLM, start with reading his directly.
+
+Pre-built client libraries are available for common languages:
 
 <Tabs items={['TypeScript', 'Python', 'Go']}>
   <Tab value="TypeScript">
     ```bash
-    npm install @projectqai/proto @bufbuild/protobuf @connectrpc/connect @connectrpc/connect-web
+    mkdir hydris-example && cd hydris-example
+    bun init -y
+    bun add @projectqai/proto @bufbuild/protobuf @connectrpc/connect @connectrpc/connect-web
     ```
-  </Tab>
-  <Tab value="Python">
-    ```bash
-    pip install grpcio grpcio-tools
-    ```
-  </Tab>
-  <Tab value="Go">
-    ```bash
-    go get google.golang.org/grpc
-    go get github.com/projectqai/proto/go
-    ```
-  </Tab>
-</Tabs>
 
-### 3. Create Your First Entity
+    Create `index.ts`:
 
-<Tabs items={['TypeScript', 'Python', 'Go']}>
-  <Tab value="TypeScript">
     ```typescript
     import { EntitySchema, WorldService } from "@projectqai/proto/world";
     import { create } from "@bufbuild/protobuf";
@@ -130,10 +120,28 @@ Install the client libraries for your language:
       changes: [entity]
     });
     ```
+
+    Run it:
+
+    ```bash
+    bun run index.ts
+    ```
   </Tab>
   <Tab value="Python">
+    ```bash
+    mkdir hydris-example && cd hydris-example
+    uv init
+    uv add grpcio protobuf
+    uv pip install git+https://github.com/projectqai/proto.git#subdirectory=python
+    ```
+
+    Create `main.py`:
+
     ```python
-    from world_pb2 import Entity, GeoSpatialComponent, SymbolComponent
+    import grpc
+    from platform_proto.world_pb2 import Entity, EntityChangeRequest, \
+        GeoSpatialComponent, SymbolComponent
+    from platform_proto.world_pb2_grpc import WorldServiceStub
 
     entity = Entity(
         id='sensor-1',
@@ -146,23 +154,70 @@ Install the client libraries for your language:
             milStd2525C='SFGPES----'
         )
     )
+
+    # Connect to Hydris and push the entity
+    channel = grpc.insecure_channel('localhost:50051')
+    client = WorldServiceStub(channel)
+
+    response = client.Push(EntityChangeRequest(changes=[entity]))
+    ```
+
+    Run it:
+
+    ```bash
+    uv run main.py
     ```
   </Tab>
   <Tab value="Go">
-    ```go
-    import pb "github.com/projectqai/proto/go"
+    ```bash
+    mkdir hydris-example && cd hydris-example
+    go mod init hydris-example
+    go get google.golang.org/grpc
+    go get github.com/projectqai/proto/go
+    ```
 
-    entity := &pb.Entity{
-        Id: "sensor-1",
-        Geo: &pb.GeoSpatialComponent{
-            Latitude:  52.52,
-            Longitude: 13.40,
-            Altitude:  100,
-        },
-        Symbol: &pb.SymbolComponent{
-            MilStd2525C: "SFGPES----",
-        },
+    Create `main.go`:
+
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        pb "github.com/projectqai/proto/go"
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/credentials/insecure"
+    )
+
+    func main() {
+        altitude := 100.0
+        entity := &pb.Entity{
+            Id: "sensor-1",
+            Geo: &pb.GeoSpatialComponent{
+                Latitude:  52.52,
+                Longitude: 13.40,
+                Altitude:  &altitude,
+            },
+            Symbol: &pb.SymbolComponent{
+                MilStd2525C: "SFGPES----",
+            },
+        }
+
+        // Connect to Hydris and push the entity
+        conn, _ := grpc.NewClient("localhost:50051",
+            grpc.WithTransportCredentials(insecure.NewCredentials()))
+        client := pb.NewWorldServiceClient(conn)
+
+        response, _ := client.Push(context.Background(),
+            &pb.EntityChangeRequest{Changes: []*pb.Entity{entity}})
+        fmt.Println(response)
     }
+    ```
+
+    Run it:
+
+    ```bash
+    go run main.go
     ```
   </Tab>
 </Tabs>
