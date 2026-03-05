@@ -5,6 +5,7 @@
     "data-sources",
     "connecting-downstreams",
     "layouts",
-    "map"
+    "map",
+    "meshtastic"
   ]
 }

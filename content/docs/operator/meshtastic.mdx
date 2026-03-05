@@ -1,0 +1,39 @@
+---
+title: MANET with Meshtastic
+description: Integrate Meshtastic radios for mesh-based position sharing
+---
+
+[Meshtastic](https://meshtastic.org/) is an open-source mesh networking platform that runs on affordable LoRa radios. Hydris can connect to Meshtastic radios directly without the need for any meshtastic software running on the host.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-meshtastic-map.png" alt="Hydris map showing Meshtastic mesh peers as entities" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+Once connected, reports from other Meshtastic nodes in the mesh appear as entities on the map. Each peer shows up with its node name and position.
+It also out of the box receives reports sent by ATAK over the meshtastic plugin.
+
+## Setup
+
+Plug a Meshtastic radio into a USB port on the device running Hydris. Hydris automatically discovers the radio via serial port and begins receiving position data from mesh peers — no manual configuration is required for most radios. 
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-meshtastic-config.png" alt="Meshtastic configuration in Hydris showing auto provisioning toggle" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+The Meshtastic service uses **Auto Provisioning** to automatically configure devices that match known Meshtastic vendor IDs.
+If your radio is not auto-detected, you can create a device config manually.
+
+To verify or change the configuration, open the command menu (`Ctrl+K` / `⌘+K`), select **Configuration**, and navigate to **Network → Meshtastic**.
+
+## Send Format
+
+Hydris can also broadcast entities back to the mesh. The **Send Format** setting controls what protocol is used:
+
+| Format | Description |
+|--------|-------------|
+| **Disabled** | Do not send anything to the mesh |
+| **CoT** | Cursor on Target. Compatible with the official ATAK Meshtastic plugin — any Android device running ATAK on the mesh can receive Hydris entities. Note that this is very bandwidth heavy, since its XML. |
+| **PLI** | Position Location Information only. Compatible with any Meshtastic device, but carries very limited information. |
+| **Hydris Native** | Efficient binary protocol for Hydris-to-Hydris communication. Much higher information density at much lower bandwidth than CoT. Use this when all peers run Hydris. |
+
+All formats are always supported when _receiving_ from a radio, so only sending needs to be configured.
