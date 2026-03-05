@@ -3,6 +3,8 @@
   "pages": [
     "index",
     "data-sources",
-    "connecting-downstreams"
+    "connecting-downstreams",
+    "layouts",
+    "map"
   ]
 }

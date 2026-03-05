@@ -1,0 +1,67 @@
+---
+title: Map
+description: Navigate and configure the map view
+---
+
+The map is the central element of the Hydris interface, displaying entities, sensor coverage, and geospatial data in real time. It appears in every layout preset and can be configured using the controls on the right side.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-map-controls.png" alt="Hydris map view with controls on the right side" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+## Map Controls
+
+The map toolbar sits on the right edge of the map. From top to bottom:
+
+| Control | Description |
+|---------|-------------|
+| **Base Layer** | Switch between Dark, Satellite, and Street map styles |
+| **Overlays** | Toggle visibility of tracks, sensors, and other layers |
+| **Range Rings** | Place an observer reference point to visualize distances |
+| **Zoom In / Out** | Adjust the map zoom level |
+| **Share** | Generate a link to the current view or focused entity |
+
+## Base Layer
+
+Click the base layer button to choose between three map styles:
+
+- **Dark** — Dark-themed vector map, reduces eye strain in low-light environments
+- **Satellite** — Aerial imagery from Esri
+- **Street** — OpenStreetMap-based street map with labels and roads
+
+You can also switch base layers from the command menu (`Ctrl+K` / `⌘+K`) using the **Switch to dark/satellite/street map** commands.
+
+## Overlays
+
+Click the overlays button to toggle which layers are visible on the map.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-map-overlays.png" alt="Map overlay filter panel showing track, sensor, network, and visualization toggles" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+## Range Rings
+
+Range rings let you place an observer reference point on the map to visualize distances from that position.
+
+1. Click the **Range Rings** button (person icon) in the map toolbar
+2. Click anywhere on the map to set the observer position
+3. Concentric rings will appear around the reference point, showing distance intervals
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-map-rangerings.png" alt="Range rings showing concentric distance circles around an observer reference point" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+This is useful for estimating how far entities are from a fixed position such as your own location or a point of interest.
+
+## Sharing
+
+Click the **Share** button to generate a shareable link:
+
+- **Share focus** — Creates a link to the currently selected entity or map position. When someone opens this link, their view will center on the same entity or coordinates.
+- **Share view** — Creates a link that captures the full state: layout preset, active layers, filters, and map position. Use this to share your exact working setup with a colleague.
+
+## Navigation
+
+- **Pan** — Click and drag the map
+- **Zoom** — Scroll wheel, pinch gesture, or use the zoom buttons
+- **Search** — Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Search for a location** to jump to a specific place or entity

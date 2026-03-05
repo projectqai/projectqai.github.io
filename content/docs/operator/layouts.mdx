@@ -1,0 +1,94 @@
+---
+title: Layouts
+description: Customize the Hydris interface with layout presets and widgets
+---
+
+Hydris ships with four layout presets, each designed for a different workflow. You can switch between them instantly and fully customize each one.
+
+## Switching Layouts
+
+Click the layout selector in the top-right corner of the screen (or use the keyboard shortcuts) to switch between presets:
+
+| Layout | Shortcut | Description |
+|--------|----------|-------------|
+| **Inspect** 	| `F1` | Best for investigating individual entities. Ideal for integrators. |
+| **Watch** 	| `F2` | Large map with entity list on the right. Best for monitoring. |
+| **Overview** 	| `F3` | Data driven situational awareness where map is less relevant. |
+| **Survey** | `F4` | Full-screen map. Best for purely geolocated work. |
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-menu.png" alt="Layout selector dropdown showing Inspect, Watch, Overview, and Survey presets" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+## Layout Presets
+
+### Inspect
+
+The default layout. Three columns: entity list on the left, map in the center, and entity detail panel on the right. Use this when you need to drill into specific entities while keeping the broader picture visible.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-inspect.png" alt="Inspect layout with entity list, map, and detail panel" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+### Watch
+
+Map-focused layout with the entity list along the right edge. The detail panel is hidden, giving the map maximum screen space. Use this for passive monitoring.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-watch.png" alt="Watch layout with large map and entity list on the right" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+### Overview
+
+A 2x2 grid showing the map, entity list, entity detail, and alerts panel simultaneously. Use this when you need everything visible at once.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-overview.png" alt="Overview layout with four panels in a grid" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+### Survey
+
+Full-screen map with no side panels. Use this for area survey, route planning, or when projecting the map on a shared display.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-survey.png" alt="Survey layout with full-screen map" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+## Customizing Layouts
+
+Each preset can be fully customized. Open the layout menu and click **Customize**, or use `Ctrl+K` and select **Customize layout**.
+
+In customize mode, each pane shows a toolbar with:
+
+- **Widget dropdown** — Change what the pane displays
+- **Split into columns** / **Split into rows** — Divide the pane into two
+- **Swap** — Swap this pane's position with another
+- **Remove** — Remove the pane from the layout
+
+Drag the dividers between panes to resize them. Click **Done** when finished.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-customize.png" alt="Layout customize mode showing pane toolbars and editing controls" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+### Available Widgets
+
+Click a pane's **Widget** dropdown to choose from three categories:
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-layout-widgets.png" alt="Widget picker showing Map, List, Details, and Alerts widgets" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+**Widgets**
+- **Map** — Live entity map
+- **List** — Entity browser (tracks and assets)
+- **Details** — Selected entity information
+- **Alerts** — Active system alerts
+
+**Cameras** — Embed a live camera feed from any camera entity in the system.
+
+**Embed** — Embed any URL as an iframe. Useful for dashboards, external tools, or documentation.
+
+## Resetting a Layout
+
+To reset a layout preset back to its default arrangement, open the command menu with `Ctrl+K` (or `⌘+K` on macOS) and select **Reset layout to preset**.
