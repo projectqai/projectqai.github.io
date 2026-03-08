@@ -4,6 +4,7 @@
     "index",
     "entities",
     "components",
+    "merge",
     "integrating-mission-systems"
   ]
 }

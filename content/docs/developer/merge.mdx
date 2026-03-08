@@ -1,0 +1,339 @@
+---
+title: Entity Merge & Synchronization
+description: How Hydris' Entity Component System acts as a CRDT
+---
+
+## Overview
+
+Hydris is a complex system with many controllers being able to act independently. To support this, the world data model itself is a **CRDT (Conflict-free Replicated Data Type)**
+built on component-level Last-Write-Wins registers.
+
+Each component of an entity is an independent **LWW-Register**. Components from different controllers
+can be merged without coordination because each controller owns distinct components — a sensor
+controller pushes `geo` and `detection`, while a classification system pushes `classification`.
+The merge function is commutative and idempotent: applying the same set of updates in any order
+produces the same final.
+
+<Callout type="warn">
+Two controllers should not push the same component on the same entity. The LWW merge will
+resolve the conflict by timestamp, but the final depends on clock accuracy and message
+ordering. If you need multiple writers for the same component, use separate entities
+and fuse them at a higher level. If unavoidable, you can use Leases to coordinate two controllers, but the coordination is local only.
+</Callout>
+
+## Component-Level LWW-Register
+
+When an entity is pushed that already exists, each non-nil component in the incoming entity
+**replaces** the corresponding component in the existing entity. Components not present in
+the incoming push are left unchanged.
+
+```
+existing:  { id: "s1", geo: {lat: 52}, symbol: {sidc: "SFG"}, label: "Alpha" }
+incoming:  { id: "s1", geo: {lat: 53} }
+final:    { id: "s1", geo: {lat: 53}, symbol: {sidc: "SFG"}, label: "Alpha" }
+```
+
+This is a **per-component LWW-Register**: each component slot is an independent register
+that accepts the latest write. Components are replaced **entirely**, not recursively merged.
+If you push a `geo` component with only `latitude` set, the existing `longitude` and `altitude`
+are lost.
+
+## Component-Level Lifetimes
+
+The engine tracks lifetimes **per component**, not per entity. Each component carries its
+own `fresh` and `until` timestamps.
+
+### Merge ordering
+
+Each component is accepted or rejected independently. For each non-nil component in the
+incoming push:
+
+```
+incoming_ts  = fresh ?? from   (of the incoming write)
+existing_ts  = fresh ?? from   (of the existing component)
+
+if incoming_ts > existing_ts  → replace component (and its lifetime)
+if incoming_ts == existing_ts → tiebreak: shorter until wins
+if incoming_ts < existing_ts  → reject (keep existing)
+```
+
+Components not present in the incoming push are never touched.
+
+### Expiry and GC
+
+The garbage collector checks each component's `until` independently:
+
+1. If a component's `until` has passed, clear it.
+2. An entity is removed from the world only when all components are empty or expired.
+3. `ExpireEntity` sets `until=now` on every component. This is a hard kill.
+
+### Case reference
+
+#### 1. Permanent push
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section geo
+    lat 52 :active, 2024-01-01, 5d
+```
+
+No `until` → geo lives indefinitely.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 52}` | T0 | — |
+
+---
+
+#### 2. Temporary push
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | T1 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section geo
+    lat 52 :crit, 2024-01-01, 1d
+```
+
+At T1, GC clears geo → no components remain → entity removed.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 52}` | T0 | T1 |
+
+---
+
+#### 3. Two writes, LWW
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `geo: {lat: 53}` | T1 | — |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section W0
+    lat 52 :done, 2024-01-01, 1d
+    section W1
+    lat 53 :active, 2024-01-02, 4d
+```
+
+W1 is fresher → replaces W0.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 53}` | T1 | — |
+
+---
+
+#### 4. Temporary replaces permanent (LWW)
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `geo: {lat: 99}` | T1 | T2 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section W0
+    lat 52 :done, 2024-01-01, 1d
+    section W1
+    lat 99 :crit, 2024-01-02, 1d
+```
+
+W1 is fresher → replaces W0. W0's permanent value is lost.
+At T2, GC clears geo → entity removed.
+
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 99}` | T1 | T2 |
+
+---
+
+#### 5. Multiple writes, latest wins
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `geo: {lat: 99}` | T1 | T3 |
+| W2 | `geo: {lat: 77}` | T2 | T3 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section W0
+    lat 52 :done, 2024-01-01, 1d
+    section W1
+    lat 99 :done, 2024-01-02, 1d
+    section W2
+    lat 77 :crit, 2024-01-03, 1d
+```
+
+Each fresher write replaces the previous. Only W2 remains.
+At T3, GC clears geo.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 77}` | T2 | T3 |
+
+---
+
+#### 6. Newer permanent supersedes temporary
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `geo: {lat: 99}` | T1 | T3 |
+| W2 | `geo: {lat: 60}` | T2 | — |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section W0
+    lat 52 :done, 2024-01-01, 1d
+    section W1
+    lat 99 :done, 2024-01-02, 1d
+    section W2
+    lat 60 :active, 2024-01-03, 3d
+```
+
+W2 is fresher → replaces W1. `until` is unset → geo lives indefinitely again.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 60}` | T2 | — |
+
+---
+
+#### 7. Push only affects pushed components
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}, symbol: {sidc: "SFG"}` | T0 | — |
+| W1 | `geo: {lat: 99}` | T1 | T2 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section geo
+    lat 52 (W0) :done, 2024-01-01, 1d
+    lat 99 (W1) :crit, 2024-01-02, 1d
+    section symbol
+    sidc SFG (W0) :active, 2024-01-01, 5d
+```
+
+W1 only contains geo → symbol is untouched.
+At T2, geo is cleared by GC. Symbol survives → entity survives.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 99}` | T1 | T2 |
+| symbol | `{sidc: "SFG"}` | T0 | — |
+
+---
+
+#### 8. Component expires, entity survives
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `classification: {identity: "hostile"}` | T1 | T2 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section geo
+    lat 52 :active, 2024-01-01, 5d
+    section classification
+    hostile :crit, 2024-01-02, 1d
+```
+
+At T2, classification expires. Geo is unaffected → entity survives.
+
+| component | value | fresh | until | after T2 |
+|-----------|-------|-------|-------|----------|
+| geo | `{lat: 52}` | T0 | — | unchanged |
+| classification | `{identity: "hostile"}` | T1 | T2 | cleared |
+
+---
+
+#### 9. ExpireEntity
+
+| Write | action | fresh | until |
+|-------|--------|-------|-------|
+| W0 | push `geo: {lat: 52}, symbol: {sidc: "SFG"}` | T0 | — |
+| — | `ExpireEntity("s1")` at T1 | — | — |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section geo
+    lat 52 :done, 2024-01-01, 2d
+    section symbol
+    sidc SFG :done, 2024-01-01, 2d
+```
+
+`ExpireEntity` sets `until=now` on every component — a hard kill.
+Next GC clears all → entity removed.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 52}` | T0 | T1 (truncated) |
+| symbol | `{sidc: "SFG"}` | T0 | T1 (truncated) |
+
+---
+
+#### 10. Same freshness, shorter until wins
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | — |
+| W1 | `geo: {lat: 99}` | T0 | T1 |
+
+```mermaid
+gantt
+    dateFormat YYYY-MM-DD
+    todayMarker off
+    axisFormat T%d
+    section W0
+    lat 52 :done, 2024-01-01, 5d
+    section W1
+    lat 99 :crit, 2024-01-01, 1d
+```
+
+Both writes have the same `fresh=T0`. Tiebreak: shorter `until` wins → W1 replaces W0.
+At T1, GC clears geo → entity removed. The permanent value is not preserved.
+
+| component | value | fresh | until |
+|-----------|-------|-------|-------|
+| geo | `{lat: 99}` | T0 | T1 |
+
