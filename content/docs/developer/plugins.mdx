@@ -1,0 +1,211 @@
+---
+title: Developing Plugins
+description: Build, publish and run TypeScript plugins for Hydris
+---
+
+Plugins are TypeScript modules that run alongside the Hydris engine in an isolated subprocess. They connect to the engine over gRPC and can watch entities, enrich data, push new entities into the world, and also connect to other systems.
+
+We'll build one from scratch, using the built-in [HexDB plugin](https://github.com/projectqai/hydra/tree/main/core/plugins/hexdb) as an example. It enriches ADS-B aircraft entities with images and registration data from [hexdb.io](https://hexdb.io).
+
+## Set up the project
+
+```bash
+mkdir my-plugin && cd my-plugin
+bun init -y
+bun add @projectqai/proto
+```
+
+Edit `package.json` to set `main` and declare compatibility:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "hydris": {
+    "compat": "<0.1.0"
+  },
+  "dependencies": {
+    "@projectqai/proto": "*"
+  }
+}
+```
+
+`hydris.compat` is a [semver range](https://github.com/blang/semver#ranges) declaring which Hydris versions this plugin supports. Checked at startup. Optional, but recommended.
+
+## Watch the world
+
+Every plugin starts with `attach` from `@projectqai/proto/device`. This connects to the Hydris engine, registers the plugin as a device entity, and calls your `run` function. Let's start simple — just watch the world and see what's going on:
+
+```typescript
+import {
+  create, EntityFilterSchema, ListEntitiesRequestSchema,
+  EntityChange, attach
+} from "@projectqai/proto/device";
+
+await attach({
+  // Unique ID for this plugin instance. Shows up as an entity in the world.
+  id: "my-plugin.service",
+  label: "My Plugin",
+
+  // Controller name groups related plugins together in the UI.
+  controller: "my-plugin",
+  device: { category: "Custom" },
+
+  // run is called once the plugin is connected and registered.
+  // - client: a gRPC client to the Hydris engine
+  // - config: user-provided config values (more on this later)
+  // - signal: aborted when the plugin should shut down
+  run: async (client, config, signal) => {
+
+    // Open a streaming watch on all entities in the world.
+    // An empty filter means everything. behaviour.maxRateHz
+    // throttles how often we receive updates.
+    const stream = client.watchEntities(
+      create(ListEntitiesRequestSchema, {
+        filter: create(EntityFilterSchema, {}),
+        behaviour: { maxRateHz: 1 },
+      }),
+      { signal }
+    );
+
+    // The stream yields events as entities are created, updated, or deleted.
+    for await (const event of stream) {
+      if (!event.entity) continue;
+
+      console.log(event.t === EntityChange.EntityChangeUpdated ? "updated" : "other",
+        event.entity.id, event.entity.label);
+    }
+  },
+});
+```
+
+Fire it up and you should see entities streaming by:
+
+```bash
+hydris plugin run index.ts --server http://localhost:50051
+```
+
+From here you could send the entities somewhere else and you already have an integration. We're going to enrich them and send them back to the world engine.
+
+## Make it do something
+
+We can filter for specific entities, enriching them with your own data, and push changes back. This is exactly what the [HexDB plugin](https://github.com/projectqai/hydra/blob/main/core/plugins/hexdb/index.ts) does to add aircraft photos.
+
+```typescript
+import {
+  create, EntitySchema, EntityFilterSchema,
+  ListEntitiesRequestSchema, EntityChange,
+  attach, push
+} from "@projectqai/proto/device";
+
+await attach({
+  id: "my-plugin.service",
+  label: "My Plugin",
+  controller: "my-plugin",
+  device: { category: "Custom" },
+
+  // Declare a config schema — users can tweak these in the UI.
+  // The config object passed to run() is typed from this.
+  schema: {
+    verbose: {
+      type: "boolean",
+      title: "Verbose logging",
+      default: false,
+    },
+  } as const,
+
+  run: async (client, config, signal) => {
+
+    // This time, filter to only entities with a transponder component (field 27).
+    // Check the component reference for all available field numbers.
+    const stream = client.watchEntities(
+      create(ListEntitiesRequestSchema, {
+        filter: create(EntityFilterSchema, { component: [27] }),
+        behaviour: { maxRateHz: 1 },
+      }),
+      { signal }
+    );
+
+    for await (const event of stream) {
+      // Only act on updates — skip deletes and other event types.
+      if (event.t !== EntityChange.EntityChangeUpdated) continue;
+      if (!event.entity) continue;
+
+      if (config.verbose) console.log("saw", event.entity.id);
+
+      // Create an entity with the same ID — this merges with the existing one.
+      // You only need to set the fields you want to add or change.
+      const enriched = create(EntitySchema, {
+        id: event.entity.id,
+        label: "Enriched: " + event.entity.id,
+      });
+
+      // push() sends it back to the engine where it merges using
+      // last-writer-wins per component.
+      await push(client, enriched);
+    }
+  },
+
+  // Report health metrics that show up in the UI under this device.
+  health: () => ({
+    1: { label: "status", value: "running" },
+  }),
+});
+```
+
+## Iterate with watch mode
+
+During development, use `--watch` to automatically rebuild and restart on file changes. No need to keep restarting manually:
+
+```bash
+hydris plugin run index.ts --watch --server http://localhost:50051
+```
+
+TypeScript is bundled with esbuild automatically. Plain `.js` files work too.
+
+## Build an OCI image
+
+Happy with your plugin? Package it up:
+
+```bash
+hydris plugin build . -t ghcr.io/projectqai/hydra/my-plugin:0.1.0
+```
+
+This reads `package.json`, bundles the entry point, and loads the image into the local Docker daemon. If you omit `-t`, the tag is derived from `name` and `version` in `package.json`.
+
+## Publish
+
+```bash
+docker push ghcr.io/projectqai/hydra/my-plugin:0.1.0
+```
+
+That's it. Your plugin is now available to anyone with access to the registry.
+
+## Run from OCI
+
+```bash
+hydris plugin run ghcr.io/projectqai/hydra/my-plugin:0.1.0 --server http://localhost:50051
+```
+
+The CLI figures out whether the argument is a local file or an OCI image reference. When pulling from a remote registry, credentials are read from `~/.docker/config.json`.
+
+## Run alongside the engine
+
+Until the proper storefront exists, launch plugins directly with the engine using `--plugin`:
+
+```bash
+hydris --plugin ghcr.io/projectqai/hydra/my-plugin:0.1.0 \
+       --plugin ./another-plugin.ts
+```
+
+Each plugin runs as a supervised subprocess and is automatically restarted on crash. Mix and match OCI refs and local files as you like.
+
+## package.json reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Plugin name, used as default image tag |
+| `version` | no | Plugin version, used as default image tag |
+| `main` | yes | TypeScript or JavaScript entry point |
+| `hydris.compat` | no | Semver range for Hydris version compatibility |

@@ -9,8 +9,7 @@ Hydris is a complex system with many controllers being able to act independently
 built on component-level Last-Write-Wins registers.
 
 Each component of an entity is an independent **LWW-Register**. Components from different controllers
-can be merged without coordination because each controller owns distinct components — a sensor
-controller pushes `geo` and `detection`, while a classification system pushes `classification`.
+can be merged without coordination because each controller owns distinct components.
 The merge function is commutative and idempotent: applying the same set of updates in any order
 produces the same final.
 
@@ -34,16 +33,13 @@ final:    { id: "s1", geo: {lat: 53}, symbol: {sidc: "SFG"}, label: "Alpha" }
 ```
 
 This is a **per-component LWW-Register**: each component slot is an independent register
-that accepts the latest write. Components are replaced **entirely**, not recursively merged.
+that accepts the freshest write. Components are replaced **entirely**, not recursively merged.
 If you push a `geo` component with only `latitude` set, the existing `longitude` and `altitude`
 are lost.
 
-## Component-Level Lifetimes
+## Lifetimes and Merge ordering
 
-The engine tracks lifetimes **per component**, not per entity. Each component carries its
-own `fresh` and `until` timestamps.
-
-### Merge ordering
+The engine tracks lifetimes **per component**. After merge, each component gets marked with the lifetime that was attached to the entity that the component originates from.
 
 Each component is accepted or rejected independently. For each non-nil component in the
 incoming push:
@@ -57,13 +53,13 @@ if incoming_ts == existing_ts → tiebreak: shorter until wins
 if incoming_ts < existing_ts  → reject (keep existing)
 ```
 
-Components not present in the incoming push are never touched.
+Components not present in the incoming push are never touched and their lifetimes remain intact.
 
 ### Expiry and GC
 
-The garbage collector checks each component's `until` independently:
+The garbage collector checks each component:
 
-1. If a component's `until` has passed, clear it.
+1. If a component's lifetime  has expired, clear it.
 2. An entity is removed from the world only when all components are empty or expired.
 3. `ExpireEntity` sets `until=now` on every component. This is a hard kill.
 
@@ -169,7 +165,7 @@ At T2, GC clears geo → entity removed.
 
 ---
 
-#### 5. Multiple writes, latest wins
+#### 5. Multiple writes, freshest wins
 
 | Write | data | fresh | until |
 |-------|------|-------|-------|
@@ -336,4 +332,54 @@ At T1, GC clears geo → entity removed. The permanent value is not preserved.
 | component | value | fresh | until |
 |-----------|-------|-------|-------|
 | geo | `{lat: 99}` | T0 | T1 |
+
+---
+
+#### 11. Entity-level lifetime reflects the largest component span
+
+| Write | data | fresh | until |
+|-------|------|-------|-------|
+| W0 | `geo: {lat: 52}` | T0 | T3 |
+| W1 | `track: {tracker: "t1"}` | T2 | T2 |
+
+The entity-level `Lifetime` is derived from the component lifetimes:
+
+- `from` = earliest component fresh (T0)
+- `fresh` = latest component fresh (T2)
+- `until` = latest component until (T3)
+
+If any component has no `until` (permanent), the entity-level `until` is unset.
+
+---
+
+#### 12. Push without lifetime does not affect entity span or expiry
+
+| Write | data | fresh | until | lifetime set? |
+|-------|------|-------|-------|---------------|
+| W0 | `geo: {lat: 52}, symbol: {sidc: "SFA"}` | T0 | T1 | yes |
+| W1 | `administrative: {id: "REG-123"}` | — | — | no |
+
+W1 has no `Lifetime` field at all. The component is accepted into the
+entity, but excluded from the entity-level lifetime computation and from the
+GC expiry decision:
+
+- The entity-level `until` remains T1, not cleared to permanent.
+- When all lifetime-bearing components expire, the entity is removed — components
+  from no-lifetime pushes do not keep it alive.
+
+Transformer-generated components (e.g. `ClassificationComponent` derived from a
+`SymbolComponent`) are also excluded. They have no per-component lifetime entry,
+so they neither affect the entity-level lifetime span nor prevent GC expiry.
+
+To make an enrichment component participate in the lifetime span,
+include a `Lifetime`. A `Lifetime` with `from` but no `until` marks the component
+as permanent, which also makes the entity permanent (since the entity-level `until`
+is only set when all lifetime-bearing components have one).
+
+```
+{ id: "s1", administrative: {id: "REG-123"}, lifetime: { from: <now> } }
+```
+
+If you want the component to survive independently but not prevent the entity from
+expiring, omit `Lifetime` entirely.
 

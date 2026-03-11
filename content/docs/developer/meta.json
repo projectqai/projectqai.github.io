@@ -3,8 +3,8 @@
   "pages": [
     "index",
     "entities",
+    "plugins",
     "components",
-    "merge",
-    "integrating-mission-systems"
+    "merge"
   ]
 }
