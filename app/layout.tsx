@@ -46,6 +46,10 @@ export default function Layout({ children }: LayoutProps<'/'>) {
           search={{
             enabled: true,
           }}
+          theme={{
+            defaultTheme: 'dark',
+            themes: ['light', 'dark', 'system'],
+          }}
         >
           {children}
         </RootProvider>

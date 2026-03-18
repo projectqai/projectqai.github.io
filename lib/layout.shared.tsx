@@ -16,5 +16,8 @@ export function baseOptions(): BaseLayoutProps {
 			transparentMode: 'none',
 		},
 		links: [],
+		themeSwitch: {
+			mode: 'light-dark-system',
+		},
 	};
 }
