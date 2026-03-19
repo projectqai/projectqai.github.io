@@ -8,7 +8,19 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 ## Installing
 
-<Tabs items={['macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
+<Tabs items={['Windows Desktop', 'Mac Desktop', 'macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
+  <Tab value="Windows Desktop">
+    Download the latest [Windows desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.20/hydris-desktop-windows-amd64-v0.0.20.zip), extract it, and run the application.
+  </Tab>
+  <Tab value="Mac Desktop">
+    Download the latest [Mac desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.20/hydris-desktop-macos-arm64-v0.0.20.zip) and extract it.
+
+    macOS will say that Apple cannot verify the app. To allow it:
+
+    1. Open **System Settings** → **Privacy & Security**
+    2. Scroll down to the message saying the app "was blocked to protect your Mac"
+    3. Click **Open Anyway**
+  </Tab>
   <Tab value="macOS">
     Download the [macOS binary](https://github.com/projectqai/hydris/releases/latest/) and run:
 
