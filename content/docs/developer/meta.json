@@ -5,6 +5,7 @@
     "entities",
     "plugins",
     "components",
-    "merge"
+    "merge",
+    "routing"
   ]
 }

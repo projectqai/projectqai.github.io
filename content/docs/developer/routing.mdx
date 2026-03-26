@@ -1,0 +1,63 @@
+---
+title: Routing & Federation
+description: How entities are distributed across nodes, networks, and transports
+---
+
+## The Routing Component
+
+By default, entities are **local** — they exist only on the node that created them. To make an entity visible to other nodes, add a `routing` component.
+
+```typescript
+{
+  id: 'asset-1',
+  geo: { latitude: 52.52, longitude: 13.405 },
+  symbol: { milStd2525C: 'SFG-UCI----D' },
+  routing: {
+    channels: [{}]
+  }
+}
+```
+
+The presence of `routing` marks the entity as **distributable**. Without it, the entity stays local — services, device configs, and infrastructure entities never leave the node.
+
+### Channels
+
+Channels are named groups that organize which entities flow where. An entity can be on multiple channels simultaneously.
+
+```typescript
+routing: {
+  channels: [
+    { },        		 // default channel
+    { name: 'fires' },   // also on the fires channel
+  ]
+}
+```
+
+The unnamed channel is the **default channel**. Consumers can filter by channel using `ChannelFilter`:
+
+```typescript
+const request = {
+  filter: {
+    channel: { name: 'fires' }
+  }
+};
+```
+
+This applies to both `ListEntities` and `WatchEntities` — only entities routed to the matching channel are returned.
+
+
+Currently there is no standard for how channels are organized by the operator. Developers should just choose the default channel for now for any entity that makes sense to other nodes. A Plugin developer must then be aware that reacting to a distributed entity could loop. For example listening to detections and creating tracks from them is fine, even if the work happens multiple times, the merge system will deduplicate it. But listening to detections and creating more detections is not fine because the other nodes do not synchronize plugin state, so they do not know which one is input and which is output, and redo the work infinitely.
+
+### Debugging
+
+Use `hydris ec ls` to inspect which entities are routed and in which direction. The **CH** column shows routing status:
+
+- **`↑`** — exported (this entity originates locally and is distributed to other nodes)
+- **`↓`** — imported (this entity was received from another node)
+- **`·`** — local only (no routing component)
+
+The number next to the arrow indicates the channel count.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-ec-ls.png" alt="hydris ec ls output showing routed entities with up arrows indicating export" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
