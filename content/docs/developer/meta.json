@@ -4,6 +4,8 @@
     "index",
     "entities",
     "plugins",
+    "plugin-reference",
+    "hal",
     "components",
     "merge",
     "routing"

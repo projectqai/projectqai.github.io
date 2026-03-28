@@ -90,7 +90,7 @@ From here you could send the entities somewhere else and you already have an int
 
 ## Make it do something
 
-We can filter for specific entities, enriching them with your own data, and push changes back. This is exactly what the [HexDB plugin](https://github.com/projectqai/hydra/blob/main/core/plugins/hexdb/index.ts) does to add aircraft photos.
+We can filter for specific entities, enrich them with your own data, and push changes back. This is exactly what the [HexDB plugin](https://github.com/projectqai/hydra/blob/main/core/plugins/hexdb/index.ts) does to add aircraft photos.
 
 ```typescript
 import {
@@ -201,11 +201,8 @@ hydris --plugin ghcr.io/projectqai/hydra/my-plugin:0.1.0 \
 
 Each plugin runs as a supervised subprocess and is automatically restarted on crash. Mix and match OCI refs and local files as you like.
 
-## package.json reference
+## Next steps
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | yes | Plugin name, used as default image tag |
-| `version` | no | Plugin version, used as default image tag |
-| `main` | yes | TypeScript or JavaScript entry point |
-| `hydris.compat` | no | Semver range for Hydris version compatibility |
+- [Plugin Reference](/docs/developer/plugin-reference) — Lifecycle, filtering, config schema, init, health metrics, data files, and the full `attach()` API
+- [Node Peripherals](/docs/developer/hal) — Access Bluetooth Low Energy, serial ports, device discovery, and push sensor metrics from plugins
+- [Component Reference](/docs/developer/components) — All available entity components and their field numbers

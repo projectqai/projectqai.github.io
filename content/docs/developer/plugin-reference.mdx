@@ -1,0 +1,204 @@
+---
+title: Plugin Reference
+description: Lifecycle, configuration, filtering, health metrics, and the attach() API
+---
+
+This page covers the details you'll need once you've built your first plugin. If you haven't yet, start with the [plugin tutorial](/docs/developer/plugins).
+
+## Plugin lifecycle
+
+1. **Attach** — The plugin connects to the engine and registers itself as a device entity.
+2. **Init** — If provided, `init()` runs once. The plugin shows as pending in the UI. If it throws, the plugin retries after 5 seconds.
+3. **Run** — `run()` is called with the gRPC client, typed config, and an `AbortSignal`. The plugin shows as active.
+4. **Health** — While running, `health()` is called every `interval` ms (default 10s). Each call extends the plugin's heartbeat TTL. If the heartbeat stops, the entity expires automatically.
+5. **Config change** — When a user updates config in the UI, `run()` is aborted via the signal and restarted with the new config. `init()` is not re-run.
+6. **Shutdown** — The signal is aborted. Clean up any resources in your `run()` function by checking `signal.aborted` or listening for the `abort` event.
+
+## Filtering entities
+
+Filters control which entities your plugin receives. You can require components, exclude components, or match specific entity IDs.
+
+```typescript
+// Only entities with a transponder that DON'T already have administrative data.
+// Great for enrichment plugins that shouldn't re-process entities.
+const stream = client.watchEntities(
+  create(ListEntitiesRequestSchema, {
+    filter: create(EntityFilterSchema, {
+      component: [27], // require TransponderComponent
+      not: create(EntityFilterSchema, { component: [28] }), // exclude AdministrativeComponent
+    }),
+    behaviour: { maxRateHz: 3 },
+  }),
+  { signal }
+);
+```
+
+```typescript
+// Watch a specific entity by ID (e.g. your own config entity).
+const stream = client.watchEntities(
+  create(ListEntitiesRequestSchema, {
+    filter: create(EntityFilterSchema, { id: "my-plugin.service" }),
+  }),
+  { signal }
+);
+```
+
+See the [component reference](/docs/developer/components) for all available field numbers.
+
+## One-time setup with init
+
+If your plugin needs to load data or initialize resources before processing entities, use the `init` function. It runs once before `run` and receives the same client, config, and signal.
+
+```typescript
+let db = new Map<string, Record<string, string>>();
+
+await attach({
+  id: "my-enricher.service",
+  label: "My Enricher",
+  controller: "my-enricher",
+  device: { category: "Feeds" },
+  schema: {} as const,
+
+  // init runs once at startup. If it throws, the plugin retries after 5 seconds.
+  init: async () => {
+    const gz = new DecompressionStream("gzip");
+    const stream = Bun.file("data.json.gz").stream().pipeThrough(gz);
+    // ... load into db
+    console.log(`loaded ${db.size} records`);
+  },
+
+  run: async (client, config, signal) => {
+    // db is ready to use here
+  },
+});
+```
+
+If `init` throws, the plugin enters a failed state and retries with a 5-second backoff. `run` is never called until `init` succeeds.
+
+## Bundling data files
+
+Plugins can include data files (databases, models, static assets) alongside the code. List them in the `files` field of `package.json`:
+
+```json
+{
+  "name": "my-enricher",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "files": ["data.json.gz", "assets/*.csv"],
+  "hydris": {
+    "compat": "<0.1.0"
+  },
+  "dependencies": {
+    "@projectqai/proto": "*"
+  }
+}
+```
+
+Glob patterns work. These files are included in the OCI image when you run `hydris plugin build` and extracted alongside `bundle.js` at runtime, so you can reference them with relative paths.
+
+## Health metrics
+
+The `health` function is called on a regular interval (default 10 seconds) and controls two things: whether the plugin's heartbeat is extended, and what metrics show up in the UI.
+
+```typescript
+let enrichedCount = 0n, seenCount = 0n, latencyMs = 0;
+
+await attach({
+  // ...
+  run: async (client, config, signal) => {
+    for await (const event of stream) {
+      seenCount++;
+      const t0 = performance.now();
+      // ... do work ...
+      latencyMs = performance.now() - t0;
+      enrichedCount++;
+    }
+  },
+
+  // Return an object with numbered keys. Each key maps to a label and value.
+  // Values can be numbers or bigints.
+  health: () => ({
+    1: { label: "entities enriched", value: enrichedCount },
+    2: { label: "entities seen", value: seenCount },
+    3: { label: "lookup latency ms", value: latencyMs },
+  }),
+
+  // How often health() is called, in milliseconds. Default: 10000.
+  interval: 5000,
+});
+```
+
+Return `true` for a simple "I'm alive" heartbeat, or `false` to let the entity expire (useful if the plugin detects it can't do useful work).
+
+## Config schema
+
+The `schema` field defines configuration options that users can edit in the UI. The `config` object passed to `run()` is typed from this schema.
+
+| Property | Description |
+|----------|-------------|
+| `type` | `"string"`, `"boolean"`, `"number"`, or `"integer"` |
+| `title` | Label shown in the UI |
+| `description` | Help text shown below the field |
+| `default` | Default value |
+| `"ui:widget"` | Optional. `"password"` for masked input, `"stepper"` for number spinners |
+| `"ui:placeholder"` | Optional. Placeholder text for string fields |
+| `"ui:order"` | Optional. Controls field ordering in the UI |
+
+```typescript
+schema: {
+  apiKey: {
+    type: "string",
+    title: "API Key",
+    "ui:widget": "password",
+    "ui:order": 0,
+  },
+  pollingInterval: {
+    type: "integer",
+    title: "Polling Interval (seconds)",
+    default: 30,
+    "ui:widget": "stepper",
+    "ui:order": 1,
+  },
+  enabled: {
+    type: "boolean",
+    title: "Enable enrichment",
+    default: true,
+  },
+} as const,
+```
+
+When a user changes config in the UI, `run()` is automatically stopped and restarted with the new values. You don't need to watch for config changes yourself.
+
+## package.json reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | yes | Plugin name, used as default image tag |
+| `version` | no | Plugin version, used as default image tag |
+| `main` | yes | TypeScript or JavaScript entry point |
+| `files` | no | Glob patterns for data files to include in the OCI image |
+| `hydris.compat` | no | Semver range for Hydris version compatibility |
+
+## attach() reference
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `id` | `string` | yes | Unique entity ID for this plugin instance |
+| `label` | `string` | no | Display name in the UI |
+| `controller` | `string` | no | Groups related plugins together in the UI |
+| `device` | `{ category?: string }` | no | Device category for UI organization |
+| `icon` | `string` | no | Icon name shown in the UI |
+| `schema` | `object` | yes | JSON Schema object defining config fields (use `{} as const` for no config) |
+| `config` | `object` | no | Default config values |
+| `init` | `(client, config, signal) => Promise<void>` | no | One-time setup before `run()`. Retries on failure with 5s backoff |
+| `run` | `(client, config, signal) => Promise<void>` | yes | Main plugin logic. Restarted on config change |
+| `health` | `() => boolean \| object` | no | Returns heartbeat status and optional metrics |
+| `interval` | `number` | no | Milliseconds between health checks (default: 10000) |
+
+## Example plugins
+
+These built-in plugins are good references for common patterns:
+
+- [**adsbdb**](https://github.com/projectqai/hydra/tree/main/core/plugins/adsbdb) — Loads a gzipped database in `init()`, enriches entities in `run()`. Shows data file bundling, component filtering with `not`, and bigint health metrics.
+- [**hexdb**](https://github.com/projectqai/hydra/tree/main/core/plugins/hexdb) — Calls an external HTTP API per entity. Shows config schema with boolean options, error handling for network requests, and latency measurement.
+- [**airthings**](https://github.com/projectqai/hydra/tree/main/core/plugins/airthings) — Connects to Airthings BLE sensors. Shows [HAL](/docs/developer/hal) bluetooth usage, BLE device discovery via entity filters, GATT service/characteristic reads, metric pushing, and device polling with configurable intervals.
