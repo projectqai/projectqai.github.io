@@ -1,0 +1,58 @@
+---
+title: Builtin Integrations
+description: Connecting to Hydris from external systems
+---
+
+Hydris can be integrated from any language using the gRPC/HTTP API, or connected to existing tactical and surveillance systems using built-in protocol adapters that require no code.
+
+If you haven't installed Hydris yet, follow the [installation instructions](/docs#installing) first.
+
+
+## Non-Code Integrations
+
+If your system supports standard protocols, no code is required to connect them to Hydris.
+Integrations are configured via the command menu -> Configuration
+
+| Protocol | Use Case |
+|----------|----------|
+| [ATAK / TAK](/docs/integration/atak) | Cursor-on-Target (also known as TAK) |
+| [ASTERIX](/docs/integration/asterix) | Surveillance radar track data |
+| [SAPIENT](/docs/integration/sapient) | The standard for Counter UAS |
+| [MAVLink](/docs/integration/mavlink) | Drone and unmanned vehicle telemetry |
+| [AIS](/docs/integration/ais) | Maritime vessel tracking |
+| [SpaceTrack](/docs/integration/spacetrack) | Satellite tracking via TLE/SGP4 |
+| [Reolink](/docs/integration/reolink) | IP cameras with RTSP streams and PTZ control |
+
+
+## Code Integrations
+
+| Method | Description |
+|--------|-------------|
+| [gRPC / HTTP API](/docs/integration/grpc) | Connect from any language using Protocol Buffers over gRPC. Multi-language quickstart with TypeScript, Python, Go, and Rust. |
+
+<Cards>
+  <Card title="gRPC / HTTP API" href="/docs/integration/grpc">
+    Multi-language quickstart with TypeScript, Python, Go, and Rust
+  </Card>
+  <Card title="ATAK" href="/docs/integration/atak">
+    Bidirectional TAK interop over TCP, UDP, and multicast
+  </Card>
+  <Card title="ASTERIX" href="/docs/integration/asterix">
+    Receive and send ASTERIX CAT 062 radar surveillance tracks
+  </Card>
+  <Card title="SAPIENT" href="/docs/integration/sapient">
+    Connect autonomous sensor networks with SAPIENT v1/v2
+  </Card>
+  <Card title="MAVLink" href="/docs/integration/mavlink">
+    Receive telemetry from drones and unmanned vehicles
+  </Card>
+  <Card title="AIS" href="/docs/integration/ais">
+    Maritime vessel positions and identity via AIS/NMEA
+  </Card>
+  <Card title="SpaceTrack" href="/docs/integration/spacetrack">
+    Track satellites using TLE data and SGP4 propagation
+  </Card>
+  <Card title="Reolink" href="/docs/integration/reolink">
+    IP cameras with RTSP streams and PTZ control
+  </Card>
+</Cards>

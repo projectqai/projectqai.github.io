@@ -1,0 +1,67 @@
+---
+title: AIS
+description: Receive maritime vessel positions and identity via AIS/NMEA
+---
+
+The AIS integration receives [Automatic Identification System](https://en.wikipedia.org/wiki/Automatic_identification_system) data from maritime receivers over TCP. It decodes AIVDM/AIVDO NMEA sentences and creates vessel entities in the Hydris world, including position, course, speed, vessel identity, and destination.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **AIS** under **Feeds** in the sidebar
+3. Select **Stream** and click **Create**
+4. Enter the **Host** and **Port** of your AIS data source and click **Apply Configuration**
+
+The host/port should point to a TCP source streaming NMEA sentences — for example an AIS receiver, RTL-SDR decoder like `rtl_ais`, or an AIS aggregation service.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Host | *required* | AIS data source hostname or IP |
+| Port | *required* | AIS data source port |
+| Entity Expiry Seconds | `300` | Seconds without update before vessel expires |
+| Latitude | | Center latitude for geo filter |
+| Longitude | | Center longitude for geo filter |
+| Radius (km) | | Only vessels within this radius are ingested |
+| Self Entity ID | | Custom entity ID for GPS self-position |
+| Self Label | | Display label for self position |
+| Self SIDC | `SFSPXM----*****` | MIL-STD-2525C symbol for self |
+| Self Allow Invalid | `false` | Accept GPS void fixes |
+
+### Ownship Position
+
+On ships, when AIS transponder and GNSS receiver share the same NMEA bus, the TCP stream contains both AIS sentences (AIVDM/AIVDO) and GNSS position fixes (GPRMC) interleaved. When the integration sees GPRMC sentences in the stream, it creates an ownship entity so your vessel appears on the map alongside the AIS traffic.
+
+The **Self** settings let you customize how the ownship entity appears — give it a label, a custom entity ID, or a different symbol. **Self Allow Invalid** controls whether void GPS fixes (receiver has no lock) are accepted or ignored.
+## Data Flow
+
+Inbound only. Connects to a TCP source streaming NMEA sentences (e.g. an AIS receiver, RTL-SDR decoder, or AIS aggregation service). Automatically reconnects on disconnect with 2–5 second backoff.
+
+## Entity Mapping
+
+Vessel entities are created with the ID format `mmsi:{mmsi}` (e.g. `mmsi:211234567`).
+
+| AIS Field | Hydris Component |
+|-----------|-----------------|
+| Position (lat/lon) | `geo` (with accuracy-based covariance: DGPS ±5m, autonomous ±50m) |
+| Speed Over Ground | `kinematics` (knots → m/s, ENU velocity) |
+| Course Over Ground | `orientation` (quaternion) |
+| Nav Status | `navigation` (underway / stationary / moored / etc.) |
+| MMSI, Callsign, IMO, Name | `transponder.ais` |
+| Vessel Name or Callsign | `label` |
+| Destination, ETA | `mission` |
+
+### Message Types
+
+| AIS Type | Description |
+|----------|-------------|
+| 1, 2, 3 | Position report (Class A) |
+| 4 | Base station report |
+| 5 | Ship static and voyage data (name, IMO, destination, ETA) |
+| 18 | Position report (Class B) |
+
+
+## Geo Filtering
+
+When `latitude`, `longitude`, and `radius_km` are set, only vessels within the specified radius are ingested. This is useful for reducing noise from global AIS feeds.

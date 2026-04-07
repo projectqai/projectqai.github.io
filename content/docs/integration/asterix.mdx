@@ -1,0 +1,72 @@
+---
+title: ASTERIX CAT 062
+description: Surveillance radar track data integration via ASTERIX binary protocol
+---
+
+The ASTERIX integration handles [EUROCONTROL ASTERIX](https://www.eurocontrol.int/asterix) Category 062 (System Track Data) surveillance reports over UDP. It supports both receiving tracks from radar systems and sending Hydris entities as ASTERIX tracks.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **ASTERIX** under **Feeds** in the sidebar
+3. Select **Receiver** or **Sender** and click **Create**
+4. Fill in the settings and click **Apply Configuration**
+
+## Connection Modes
+
+### Receiver
+
+Receive ASTERIX CAT 062 track data from radar systems. Inbound only.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Listen Address | `:8600` | UDP address to listen on |
+| Category | `62` | ASTERIX category (only 62 supported) |
+| Source Prefix | | Prefix for entity IDs from this receiver |
+
+Incoming tracks are created as entities with the ID format `asterix.{sourcePrefix}.{trackNumber}`.
+
+### Sender
+
+Forward Hydris entities as ASTERIX CAT 062 tracks to a UDP destination. Outbound only.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Address | *required* | UDP destination address |
+| Category | `62` | ASTERIX category (only 62 supported) |
+| SAC | `0` | System Area Code |
+| SIC | `1` | System Identification Code |
+
+## Data Mapping
+
+### Inbound (ASTERIX → Hydris)
+
+| ASTERIX Data Element | Hydris Component |
+|---------------------|-----------------|
+| Calculated Position (WGS-84) | `geo.latitude` / `geo.longitude` |
+| Calculated Altitude (geometric > barometric > flight level) | `geo.altitude` (converted from feet to meters) |
+| Target Identification (callsign) | `label` |
+| Calculated Velocity (Cartesian Vx/Vy) | `kinematics.velocity` (ENU) |
+| Calculated Acceleration (Ax/Ay) | `kinematics.acceleration` |
+| Time of Track Information | `lifetime.from` (seconds since midnight UTC) |
+| Track Number | Entity ID suffix |
+
+### Outbound (Hydris → ASTERIX)
+
+Hydris entities with a `geo` component are encoded as CAT 062 track messages. Track numbers are managed with an LRU cache that maps entity IDs to 12-bit track numbers (1–4095).
+
+| Hydris Component | ASTERIX Data Element |
+|-----------------|---------------------|
+| `geo.latitude` / `geo.longitude` | WGS-84 Position |
+| `geo.altitude` | Geometric Altitude (converted to feet) |
+| `label` | Target Identification (callsign) |
+| `kinematics.velocity` | Cartesian Velocity |
+| `kinematics.acceleration` | Cartesian Acceleration |
+| `classification.identity` | MD4 Status (Friendly / No Interrogation) |
+
+## Notes
+
+- Only ASTERIX Category 62 (System Track Data) is supported.
+- Altitude priority on inbound: geometric altitude is preferred over barometric, which is preferred over flight level.
+- Tracks without a WGS-84 position are skipped.
+- Inbound tracks expire 30 seconds after the last update by default.

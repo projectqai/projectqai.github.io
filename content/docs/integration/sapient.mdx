@@ -1,0 +1,109 @@
+---
+title: SAPIENT
+description: Multi-sensor fusion and autonomous sensor network integration
+---
+
+The [SAPIENT](https://www.gov.uk/government/publications/sapient-autonomous-sensor-system) (Sensor Protocol Intelligent Exploitation and Network Transmission) integration connects autonomous sensor networks to Hydris. It supports sensor registration, detection reports, status monitoring, field-of-view tracking, and sensor mode tasking.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **SAPIENT** under **Network** in the sidebar
+3. Select **Server**, **Peer**, or **Client** and click **Create**
+4. Fill in the settings and click **Apply Configuration**
+
+## Connection Modes
+
+### Server
+
+Accept inbound connections from SAPIENT sensors. The most common mode — sensors connect to Hydris directly.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Address | `:5020` | TCP listen address |
+
+Receives registrations, detection reports, and status updates from connected sensors. Sends registration acknowledgments and mode change tasks back to sensors. Supports both SAPIENT v1 and v2 ICD versions (auto-detected from the registration message).
+
+### Peer
+
+Connect to an Apex middleware instance as a SAPIENT peer.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Address | `localhost:5001` | Apex middleware address |
+
+Same functionality as server mode, but connects outbound to existing SAPIENT middleware infrastructure rather than accepting inbound connections.
+
+### Client
+
+Connect to a remote SAPIENT server as a fusion node. Primarily outbound.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Address | *required* | Remote SAPIENT server address |
+
+Registers as a fusion node, watches for detection entities in Hydris and forwards them as detection reports. Sends periodic status reports every 10 seconds. Automatically reconnects after 5 seconds on disconnection.
+
+## Entity Mapping
+
+### Sensor Registration
+
+When a sensor registers (server/peer modes), Hydris creates a device entity with ID `sapient:{nodeID}`. The sensor's node type is mapped to a MIL-STD-2525C symbol:
+
+| Node Type | Symbol |
+|-----------|--------|
+| Radar, LiDAR | Ground sensor (radar equipment) |
+| Camera, Seismic, Acoustic | Ground sensor (electro-optical) |
+| Kinetic, LDEW, RF DEW | Weapon system |
+| Mobile, Fusion | Ground vehicle / headquarters |
+| Human | Ground personnel |
+
+Available sensor modes from the registration are stored as a `ConfigurableComponent`, allowing operators to switch modes through the Hydris UI.
+
+### Detection Reports
+
+Incoming detections are created as entities with ID `sapient:{nodeID}:{objectID}`. The integration handles two location formats:
+
+- **Cartesian (lat/lng)**: Stored directly as a `geo` component
+- **Polar (range/bearing)**: Stored as a `pose` component relative to the sensor entity, preserving the original measurement frame. For radar sensors with known position, azimuth, elevation, and slant range are computed.
+
+| SAPIENT Field | Hydris Component |
+|--------------|-----------------|
+| Location (lat/lng) | `geo` |
+| Location (range/bearing) | `pose` (parent = sensor entity) |
+| Classification | `symbol` + `label` |
+| Velocity (ENU) | `kinematics` |
+| Confidence | Used for filtering (< 0.5 dropped) |
+
+Detections with an empty classification, classification type "Unknown", or confidence below 0.5 are dropped. Default expiry is 30 seconds (5 seconds for radar detections).
+
+### Status Reports
+
+Sensor status updates map to:
+
+| SAPIENT Field | Hydris Component |
+|--------------|-----------------|
+| Node location | `geo` (sensor position) |
+| Power level | `power.chargePercent` |
+| System status (OK/ERROR) | `device.state` |
+| Field of view | Separate coverage circle entity (`sapient:{nodeID}.coverage`) |
+| Current mode | Stored for tasking comparison |
+
+### Sensor Mode Tasking
+
+When an operator changes a sensor's mode through the Hydris configuration UI, the integration detects the mismatch between the requested and reported mode and automatically sends a `mode_change` task to the sensor. Redundant tasks are suppressed if the sensor is already in the requested mode.
+
+## Classification Mapping
+
+SAPIENT detection classifications are mapped to MIL-STD-2525C symbols using pattern matching:
+
+| Classification | Symbol |
+|---------------|--------|
+| Rotary wing | Military rotary aircraft |
+| Fixed wing, UAV, Drone | Military fixed-wing aircraft |
+| Helicopter | Attack helicopter |
+| Land/ground vehicle | Ground vehicle |
+| Vessel, Ship, Boat | Sea surface vessel |
+| Human, Person | Unknown personnel |
+| Bomb, IED, Explosive | Improvised explosive device |
+| Mine | Land mine |

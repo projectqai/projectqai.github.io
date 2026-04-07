@@ -1,0 +1,59 @@
+---
+title: MAVLink
+description: Receive telemetry from drones and unmanned vehicles over MAVLink
+---
+
+The MAVLink integration receives telemetry from drones, rovers, boats, and other unmanned vehicles using the [MAVLink](https://mavlink.io/) protocol. Hydris acts as a ground control station (GCS), receiving position, attitude, battery, and navigation state from connected vehicles.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **MAVLink** under **Network** in the sidebar
+3. Select **Endpoint** and click **Create**
+4. Fill in the settings and click **Apply Configuration**
+
+The default transport is **UDP Server** on port `14550` — the standard GCS listen port. Most autopilots and companion computers will broadcast to it out of the box, so the defaults usually work without changes.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Transport | `udp_server` | Connection mode: `udp_server`, `udp_client`, `tcp_client`, `tcp_server` |
+| Address | `0.0.0.0:14550` | Listen or connect address |
+| Entity Expiry Seconds | `60` | Seconds without update before vehicle entity expires |
+| Stream Request | `true` | Request telemetry streams from ArduPilot vehicles |
+| Stream Rate Hz | `4` | Requested telemetry rate (1–50 Hz) |
+| MAVLink Version | `2` | Protocol version for outgoing frames (1 or 2) |
+| Entity Prefix | `mavlink` | Prefix for entity IDs |
+| SIDC | | MIL-STD-2525C symbol code override |
+
+## Data Flow
+
+Inbound only. The integration parses MAVLink telemetry packets and creates entities in the Hydris world. No commands are sent to vehicles.
+
+## Entity Mapping
+
+Entities are created with the ID format `{entity_prefix}.{system_id}.{component_id}` (e.g. `mavlink.1.1`).
+
+| MAVLink Message | Hydris Component |
+|----------------|-----------------|
+| HEARTBEAT | `symbol` (vehicle type), `navigation` (armed state, flight mode) |
+| GLOBAL_POSITION_INT | `geo` (lat, lon, altitude), `kinematics` (velocity ENU) |
+| ATTITUDE | `orientation` (quaternion), `kinematics` (angular rates) |
+| SYS_STATUS / BATTERY_STATUS | `power` (battery %, voltage, time remaining) |
+| VFR_HUD | `kinematics` (groundspeed, heading → ENU velocity) |
+| GPS_RAW_INT | `geo` (position with HDOP/VDOP covariance) |
+| MISSION_CURRENT | `navigation` (waypoint progress) |
+
+## Vehicle Type Symbols
+
+The vehicle type from HEARTBEAT is mapped to a MIL-STD-2525C symbol and label:
+
+| MAVLink Type | Label |
+|-------------|-------|
+| Fixed Wing | Fixed Wing |
+| Quadrotor / Hexarotor / Octorotor | Quadrotor / Hexarotor / Octorotor |
+| Helicopter | Helicopter |
+| Ground Rover | Rover |
+| Boat | Boat |
+| Submarine | Submarine |

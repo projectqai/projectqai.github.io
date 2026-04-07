@@ -1,0 +1,79 @@
+---
+title: Reolink
+description: IP camera integration with RTSP streams and PTZ control
+---
+
+The Reolink integration connects [Reolink](https://reolink.com/) IP cameras to Hydris, providing live video streams (RTSP and snapshots) and bidirectional PTZ (pan-tilt-zoom) control. Cameras can be discovered automatically via network scanning or configured manually.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **Reolink** under **Cameras** in the sidebar
+3. Set the default **Username** and **Password** for your cameras and click **Apply Configuration**
+
+With **Auto Probe** enabled (the default), Reolink cameras on the local network are discovered and connected automatically. You can also add cameras manually by selecting **Camera** and clicking **Create**, then entering the camera's IP address.
+
+## Service Settings
+
+These apply to all cameras managed by this integration:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Username | `admin` | Default credentials for all cameras |
+| Password | | Default password |
+| Auto Probe | `true` | Automatically connect cameras found by network scan |
+
+## Camera Settings
+
+Per-camera overrides, shown when you select a camera in the sidebar:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Username | *(service default)* | Override username |
+| Password | *(service default)* | Override password |
+| FOV | *(auto from model)* | Horizontal field of view in degrees |
+| Range Min | | Blind zone distance in meters |
+| Range Max | | Maximum detection range in meters |
+| Heading | `0` | Camera heading from north in degrees |
+| Latitude | | Camera position |
+| Longitude | | Camera position |
+
+## Discovery
+
+Cameras are discovered through two mechanisms:
+
+1. **Network scan:** Hydris's built-in network scanner detects Reolink devices by vendor MAC prefix. When **Auto Probe** is enabled, discovered cameras are automatically connected.
+2. **WS-Discovery (ONVIF):** Multicast probe on the ONVIF discovery address finds cameras that support the ONVIF standard.
+
+## Entity Mapping
+
+Camera entities are created with the ID format `reolink.device.{mac_address}`.
+
+| Field | Hydris Component |
+|-------|-----------------|
+| RTSP streams (main + sub) | `camera` (WebRTC/RTSP URLs) |
+| HTTP snapshot | `camera` (snapshot URL) |
+| Manufacturer + model | `label`, `device` (hardware ID) |
+| Configured position | `geo` |
+| PTZ position (if capable) | `pose` on focal point entity (azimuth, elevation, range) |
+
+### PTZ Cameras
+
+For PTZ-capable models, Hydris creates a focal point entity (`{camera_id}~fp`) that represents where the camera is looking. Moving the focal point through the Hydris UI sends PTZ commands to the camera. The integration polls the camera every 5 seconds and reflects external PTZ movements back into the entity.
+
+## Supported Models
+
+The integration includes a built-in database of Reolink camera specifications:
+
+| Model | FOV | Range | PTZ |
+|-------|-----|-------|-----|
+| Duo 3 PoE | 180° | 30m | No |
+| TrackMix PoE | 104° / 38° | 30m | Yes |
+| Argus 3 Pro | 105° | 10m | No |
+| Argus 4 Pro | 180° | 10m | No |
+| E1 Zoom | 98° / 32° | 12m | Yes |
+| E1 Outdoor | 90° / 50° | 12m | Yes |
+| CX410 | 89° | 30m | No |
+| CX810 | 93° | 30m | No |
+
+Unknown models still work — FOV and range can be configured manually.

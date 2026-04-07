@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "operator",
+    "integration",
     "developer"
   ]
 }

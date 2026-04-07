@@ -3,9 +3,9 @@ title: Developing Plugins
 description: Build, publish and run TypeScript plugins for Hydris
 ---
 
-Plugins are TypeScript modules that run alongside the Hydris engine in an isolated subprocess. They connect to the engine over gRPC and can watch entities, enrich data, push new entities into the world, and also connect to other systems.
+Plugins are just regular TypeScript that connects to the local engine over grpc. There is a convenience wrapper for the most common plugin type that has exactly one configurable. You don't need to use it, but it makes life easier to start with that.
 
-We'll build one from scratch, using the built-in [HexDB plugin](https://github.com/projectqai/hydra/tree/main/core/plugins/hexdb) as an example. It enriches ADS-B aircraft entities with images and registration data from [hexdb.io](https://hexdb.io).
+We'll build one from scratch, using the built-in [HexDB plugin](https://github.com/projectqai/hydra/tree/main/plugins/hexdb) as an example. It enriches ADS-B aircraft entities with images and registration data from [hexdb.io](https://hexdb.io).
 
 ## Set up the project
 

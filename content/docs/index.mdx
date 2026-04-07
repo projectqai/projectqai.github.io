@@ -101,14 +101,26 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
     </div>
   </Link>
 
-  <Link href="/docs/developer" className="group relative flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 p-8 transition-all duration-300 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 no-underline">
+  <Link href="/docs/integration" className="group relative flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 p-8 transition-all duration-300 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 no-underline">
     <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
     </div>
-    <h3 className="mb-2 text-xl font-semibold text-black dark:text-white group-hover:text-green-500 transition-colors">Developer Guide</h3>
-    <span className="mb-6 block text-sm leading-relaxed text-gray-600 dark:text-gray-400">Build custom integrations with the Hydris and get access to a vast ecosystem. Create reconcilers on top of the situational awareness picture, feed sensor data into it, or connect your mission systems.</span>
+    <h3 className="mb-2 text-xl font-semibold text-black dark:text-white group-hover:text-green-500 transition-colors">Integration Guide</h3>
+    <span className="mb-6 block text-sm leading-relaxed text-gray-600 dark:text-gray-400">Connect external systems to Hydris with zero code using standard protocols, like ATAK, ASTERIX, SAPIENT, MAVLINK, or use the gRPC API in any language.</span>
     <div className="mt-auto flex items-center gap-2 text-sm font-medium text-green-500">
-      Start building
+      Start integrating
+      <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </div>
+  </Link>
+
+  <Link href="/docs/developer" className="group relative flex flex-col rounded-xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-zinc-900/50 p-8 transition-all duration-300 hover:border-green-500/50 hover:shadow-lg hover:shadow-green-500/5 no-underline">
+    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/10 text-green-500">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v18M3 12h18"/></svg>
+    </div>
+    <h3 className="mb-2 text-xl font-semibold text-black dark:text-white group-hover:text-green-500 transition-colors">Developer Guide</h3>
+    <span className="mb-6 block text-sm leading-relaxed text-gray-600 dark:text-gray-400">Build TypeScript plugins that extend Hydris with custom logic, data enrichment, and hardware integrations. Publish and distribute as OCI images.</span>
+    <div className="mt-auto flex items-center gap-2 text-sm font-medium text-green-500">
+      Build plugins
       <svg className="h-4 w-4 transition-transform group-hover:translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </div>
   </Link>

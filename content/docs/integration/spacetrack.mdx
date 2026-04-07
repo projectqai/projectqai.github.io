@@ -1,0 +1,70 @@
+---
+title: SpaceTrack
+description: Track satellites using TLE data and SGP4 propagation
+---
+
+The SpaceTrack integration tracks satellites by propagating [Two-Line Element sets (TLEs)](https://en.wikipedia.org/wiki/Two-line_element_set) using the SGP4 algorithm. It computes real-time positions and velocities for one or many satellites, and optionally generates ground track orbit lines.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **SpaceTrack** under **Feeds** in the sidebar
+3. Select **Orbits** and click **Create**
+4. Paste a TLE or a URL to a TLE file into the **TLE** field and click **Apply Configuration**
+
+The satellite will appear on the map immediately and update its position in real time.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| TLE | *required* | Inline TLE data (3-line format) or URL to a TLE file |
+| ID | | Entity ID prefix (single satellite only) |
+| Label | | Display label |
+| Symbol | `SNPPS-----*****` | MIL-STD-2525C symbol code |
+| Interval | `1.0` | Position update interval in seconds |
+| Orbit Interval | `60.0` | Orbit ground track update interval in seconds |
+| TLE Refresh Seconds | `3600` | Re-fetch interval when TLE is a URL |
+| Username | | HTTP basic auth username for TLE source |
+| Password | | HTTP basic auth password for TLE source |
+| Disable Orbit Track | `false` | Skip orbit ground track generation |
+
+## Data Flow
+
+The integration fetches TLE data once (or periodically from a URL), then computes satellite positions locally using SGP4 propagation. No ongoing network connection is required after the initial TLE fetch.
+
+## Entity Mapping
+
+- **Single satellite ID:** `spacetrack.{id}`
+- **Bulk TLE file IDs:** `spacetrack.{base_id}.{sanitized_name}` (names lowercased, spaces to hyphens)
+- **Orbit entity ID:** `{satellite_id}.orbit`
+
+| Computed Field | Hydris Component |
+|---------------|-----------------|
+| Position (lat, lon, altitude) | `geo` |
+| ENU velocity | `kinematics` (with covariance) |
+| Position uncertainty | `geo.covariance` (~1 km baseline + 1.5 km/day TLE age) |
+| TLE name | `label` |
+| Ground track | `geo_shape` (line geometry on orbit entity) |
+
+## TLE Sources
+
+The `tle` parameter accepts either inline TLE text or a URL:
+
+**Inline (single satellite):**
+```
+ISS (ZARYA)
+1 25544U 98067A   24001.50000000  .00016717  00000-0  10270-3 0  9993
+2 25544  51.6400 200.0000 0007417  50.0000 310.0000 15.49560000000001
+```
+
+**URL (bulk file):**
+```
+https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle
+```
+
+When using a URL, TLEs are re-fetched at the configured `tle_refresh_seconds` interval. HTTP basic auth is supported for authenticated sources like [space-track.org](https://www.space-track.org/).
+
+## Orbit Ground Tracks
+
+Unless disabled, the integration propagates one full orbital period at 1-minute steps and pushes the result as a line geometry entity. This renders as the satellite's ground track on the map.
