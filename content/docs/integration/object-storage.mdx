@@ -1,0 +1,98 @@
+---
+title: Object Storage
+description: Configure artifact storage backends for files, images, and large data
+---
+
+Hydris can store binary artifacts (files, images, documents, captures) alongside entities. By default, artifacts are stored on local disk. You can configure an external storage backend like Amazon S3, Google Cloud Storage, or MinIO for production use.
+
+## Basics
+
+Upload and download artifacts using the CLI:
+
+```bash
+# Upload a file
+hydris artifact put photo.jpg --expires 7d
+
+# List artifacts
+hydris artifact list
+
+# Download by ID
+hydris artifact get artifact:1234567890 -o photo.jpg
+
+# Delete
+hydris artifact delete artifact:1234567890
+```
+
+Artifacts are automatically deleted when they expire. Set `--expires` to control retention (e.g. `24h`, `7d`, `30d`).
+
+## Storage backends
+
+The **Artifact Storage** service appears in the configuration panel. The `backend` setting controls where blobs are stored:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Uses the last registered plugin backend if available, otherwise local disk |
+| `local` | Always uses local disk |
+| Plugin name (e.g. `s3`) | Uses that specific plugin backend |
+
+## Setting up S3 storage
+
+The S3 storage plugin supports Amazon S3, Google Cloud Storage (via S3-compatible API), MinIO, and any S3-compatible object store.
+
+### 1. Enable the S3 plugin
+
+Load the built-in S3 storage plugin. It will appear as a child device under **Artifact Storage** in the configuration panel.
+
+### 2. Configure credentials
+
+In the UI, find **S3 Storage** under **Artifact Storage** and fill in:
+
+| Field | Description |
+|-------|-------------|
+| **Bucket** | S3 bucket name |
+| **Region** | AWS region (e.g. `us-east-1`). For GCS, use the storage region (e.g. `europe-west1`) |
+| **Access Key** | AWS access key ID, or GCS HMAC access key |
+| **Secret Key** | AWS secret access key, or GCS HMAC secret |
+| **Endpoint** | Custom endpoint URL for S3-compatible stores. Leave empty for AWS S3 |
+
+### 3. Endpoint examples
+
+| Provider | Endpoint |
+|----------|----------|
+| Amazon S3 | *(leave empty)* |
+| Google Cloud Storage | `https://storage.googleapis.com` |
+| MinIO | `http://minio.local:9000` |
+| Backblaze B2 | `https://s3.us-west-002.backblazeb2.com` |
+| Cloudflare R2 | `https://<account-id>.r2.cloudflarestorage.com` |
+
+### 4. Verify
+
+Once credentials are configured, the S3 Storage device should show as **Active**. Upload a test artifact:
+
+```bash
+hydris artifact put testfile.txt
+hydris artifact list
+```
+
+The artifact should appear in your S3 bucket.
+
+## How it works
+
+- **Upload:** When you upload an artifact, the blob goes to the active storage backend. The entity's `artifact.location` is set to the storage URL.
+- **Download:** The engine retrieves the blob from the active backend. If the blob isn't found there (e.g. it was uploaded before S3 was configured), the engine falls back to local disk for reads.
+- **Expiry:** When an artifact entity expires, the engine deletes the blob from storage automatically.
+- **Metadata:** Each blob stored in S3 includes the entity metadata as an object header (`x-amz-meta-hydris-entity`), enabling disaster recovery by scanning the bucket.
+
+## Local storage
+
+Local artifacts are stored in the Hydris config directory:
+
+```
+~/.config/hydris/artifacts/
+```
+
+The local store refuses writes when disk usage exceeds 80% to prevent filling the disk.
+
+## Disk usage
+
+Monitor artifact storage usage through the standard system metrics. Large artifacts with short expiry times are automatically cleaned up. For long-term storage of large files, use an external backend like S3.

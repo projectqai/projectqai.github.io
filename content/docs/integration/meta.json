@@ -9,6 +9,7 @@
     "ais",
     "spacetrack",
     "reolink",
+    "object-storage",
     "grpc"
   ]
 }

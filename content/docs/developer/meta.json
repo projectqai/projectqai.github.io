@@ -5,6 +5,7 @@
     "entities",
     "plugins",
     "plugin-reference",
+    "storage-plugins",
     "hal",
     "components",
     "merge",

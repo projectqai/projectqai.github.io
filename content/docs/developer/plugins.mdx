@@ -80,11 +80,13 @@ await attach({
 });
 ```
 
-Fire it up and you should see entities streaming by:
+Load it into a running engine to test:
 
 ```bash
-hydris plugin run index.ts --server http://localhost:50051
+hydris plugin run index.ts
 ```
+
+This bundles the TypeScript, uploads it to the engine, and runs it in-process. Logs stream back to your terminal. Press Ctrl+C to unload.
 
 From here you could send the entities somewhere else and you already have an integration. We're going to enrich them and send them back to the world engine.
 
@@ -154,15 +156,21 @@ await attach({
 });
 ```
 
-## Iterate with watch mode
+## Development workflow
 
-During development, use `--watch` to automatically rebuild and restart on file changes. No need to keep restarting manually:
+During development, `hydris plugin run` uploads your plugin to the engine and runs it in-process. Logs stream back to your terminal:
 
 ```bash
-hydris plugin run index.ts --watch --server http://localhost:50051
+hydris plugin run index.ts
 ```
 
-TypeScript is bundled with esbuild automatically. Plain `.js` files work too.
+If the engine is on a different host, use `--server`:
+
+```bash
+hydris plugin run index.ts --server remote-host:50051
+```
+
+TypeScript is bundled with esbuild automatically. Plain `.js` files work too. The plugin is unloaded when you disconnect (Ctrl+C, network loss, etc.).
 
 ## Build an OCI image
 
@@ -182,27 +190,13 @@ docker push ghcr.io/projectqai/hydra/my-plugin:0.1.0
 
 That's it. Your plugin is now available to anyone with access to the registry.
 
-## Run from OCI
+## Install plugins
 
-```bash
-hydris plugin run ghcr.io/projectqai/hydra/my-plugin:0.1.0 --server http://localhost:50051
-```
-
-The CLI figures out whether the argument is a local file or an OCI image reference. When pulling from a remote registry, credentials are read from `~/.docker/config.json`.
-
-## Run alongside the engine
-
-Until the proper storefront exists, launch plugins directly with the engine using `--plugin`:
-
-```bash
-hydris --plugin ghcr.io/projectqai/hydra/my-plugin:0.1.0 \
-       --plugin ./another-plugin.ts
-```
-
-Each plugin runs as a supervised subprocess and is automatically restarted on crash. Mix and match OCI refs and local files as you like.
+Plugins from the registry or custom plugin feeds are managed through the Hydris UI. OCI images are pulled and run in-process by the engine. Credentials for private registries can be configured via the Custom Plugins panel.
 
 ## Next steps
 
 - [Plugin Reference](/docs/developer/plugin-reference) — Lifecycle, filtering, config schema, init, health metrics, data files, and the full `attach()` API
+- [Storage Plugins](/docs/developer/storage-plugins) — Build custom artifact storage backends (S3, GCS, MinIO, etc.)
 - [Node Peripherals](/docs/developer/hal) — Access Bluetooth Low Energy, serial ports, device discovery, and push sensor metrics from plugins
 - [Component Reference](/docs/developer/components) — All available entity components and their field numbers

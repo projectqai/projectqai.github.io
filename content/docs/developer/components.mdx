@@ -999,6 +999,84 @@ config: {
 
 ---
 
+### ArtifactComponent
+
+Binary data (files, images, documents) stored in the artifact system. The blob is stored separately — this component holds metadata and optional external location references. Artifacts are persisted across engine restarts. When an artifact entity expires (via `lifetime.until`), the blob is automatically deleted from storage.
+
+**Field number:** 61
+
+**Fields:**
+- `id` (string) - Artifact identifier, used as the storage key
+- `content_type` (string) - MIME type (e.g. `image/jpeg`, `application/pdf`)
+- `location` (repeated ArtifactLocation) - External URLs where the blob is stored (e.g. S3). Empty when stored locally
+- `size_bytes` (int64, optional) - Size of the blob in bytes. Set automatically on upload
+- `sha256` (string, optional) - SHA-256 hex digest of the blob. Set automatically on upload
+
+**Example:**
+```typescript
+{
+  id: "report:2026-04-08",
+  artifact: {
+    id: "report:2026-04-08",
+    contentType: "application/pdf",
+    sizeBytes: 1048576,
+    sha256: "a4244aa43ddd...",
+    location: [{ url: "https://bucket.s3.amazonaws.com/report:2026-04-08" }]
+  },
+  lifetime: {
+    until: new Date("2026-05-08T00:00:00Z")  // auto-deletes after 30 days
+  }
+}
+```
+
+**Upload via CLI:**
+```bash
+# Upload a file — creates entity + stores blob
+hydris artifact put report.pdf --id report:2026-04-08 --type application/pdf --expires 30d
+
+# Download by ID
+hydris artifact get report:2026-04-08 -o report.pdf
+
+# Download by SHA-256 hash
+hydris artifact get a4244aa43ddd... -o report.pdf
+
+# List all artifacts
+hydris artifact list
+
+# Delete (expires entity + removes blob)
+hydris artifact delete report:2026-04-08
+```
+
+**Upload via API:**
+```typescript
+// 1. Create entity with ArtifactComponent
+await client.push({
+  changes: [{
+    id: "report:2026-04-08",
+    artifact: {
+      id: "report:2026-04-08",
+      contentType: "application/pdf",
+    },
+    lifetime: { until: expiry },
+  }],
+});
+
+// 2. Upload blob via ArtifactService.UploadArtifact (streaming RPC)
+const stream = artifactClient.uploadArtifact();
+await stream.send({ id: "report:2026-04-08" });
+await stream.send({ chunk: fileData });
+await stream.close();
+```
+
+**Storage backends:** By default, blobs are stored on local disk. Storage plugins (like S3) can provide alternative backends. When a plugin backend is active, uploaded blobs go to the plugin and `location` is set automatically. See [Object Storage](/docs/integration/object-storage) for setup and [Storage Plugins](/docs/developer/storage-plugins) for writing custom backends.
+
+**When to use:**
+- Storing evidence files (images, documents, logs) alongside detections or events
+- Attaching captured data to sensor entities via `CaptureComponent.content`
+- Large payloads that don't fit in entity components
+
+---
+
 ## Component Combinations
 
 ### Common Patterns
