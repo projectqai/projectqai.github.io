@@ -10,10 +10,10 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 
 <Tabs items={['Windows Desktop', 'Mac Desktop', 'macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
   <Tab value="Windows Desktop">
-    Download the latest [Windows desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.20/hydris-desktop-windows-amd64-v0.0.20.zip), extract it, and run the application.
+    Download the latest [Windows desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.21/hydris-desktop-windows-amd64-v0.0.21.zip), extract it, and run the application.
   </Tab>
   <Tab value="Mac Desktop">
-    Download the latest [Mac desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.20/hydris-desktop-macos-arm64-v0.0.20.zip) and extract it.
+    Download the latest [Mac desktop release](https://github.com/projectqai/hydris/releases/download/v0.0.21/hydris-desktop-macos-arm64-v0.0.21.zip) and extract it.
 
     macOS will say that Apple cannot verify the app. To allow it:
 
@@ -72,7 +72,7 @@ import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
     To persist world state across restarts, add a volume:
 
     ```bash
-    docker run -p 50051:50051 -v hydris-data:/data -ti ghcr.io/projectqai/hydris:latest -w /data/world.yaml
+    docker run -p 50051:50051 -v hydris-data:/root/.config/hydris/ -ti ghcr.io/projectqai/hydris:latest -w /data/world.yaml
     ```
 
     Hydris starts on `localhost:50051` with a web UI at `http://localhost:50051`
