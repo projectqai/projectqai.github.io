@@ -57,7 +57,6 @@ await attach({
   label: "My Enricher",
   controller: "my-enricher",
   device: { category: "Feeds" },
-  schema: {} as const,
 
   // init runs once at startup. If it throws, the plugin retries after 5 seconds.
   init: async () => {
@@ -101,7 +100,7 @@ Glob patterns work. These files are included in the OCI image when you run `hydr
 The `health` function is called on a regular interval (default 10 seconds) and controls two things: whether the plugin's heartbeat is extended, and what metrics show up in the UI.
 
 ```typescript
-let enrichedCount = 0n, seenCount = 0n, latencyMs = 0;
+let enrichedCount = 0, seenCount = 0, latencyMs = 0;
 
 await attach({
   // ...
@@ -188,7 +187,7 @@ When a user changes config in the UI, `run()` is automatically stopped and resta
 | `controller` | `string` | no | Groups related plugins together in the UI |
 | `device` | `{ category?: string }` | no | Device category for UI organization |
 | `icon` | `string` | no | Icon name shown in the UI |
-| `schema` | `object` | yes | JSON Schema object defining config fields (use `{} as const` for no config) |
+| `schema` | `object` | no | JSON Schema object defining config fields. Defaults to `{}` (no config) |
 | `config` | `object` | no | Default config values |
 | `init` | `(client, config, signal) => Promise<void>` | no | One-time setup before `run()`. Retries on failure with 5s backoff |
 | `run` | `(client, config, signal) => Promise<void>` | yes | Main plugin logic. Restarted on config change |

@@ -10,80 +10,93 @@ We'll build one from scratch, using the built-in [HexDB plugin](https://github.c
 ## Set up the project
 
 ```bash
-mkdir my-plugin && cd my-plugin
-bun init -y
-bun add @projectqai/proto
+bun create projectqai/plugin-template my-plugin
+cd my-plugin
 ```
 
-Edit `package.json` to set `main` and declare compatibility:
+You get a working plugin with TypeScript, a formatter and linter ([Biome](https://biomejs.dev)), and scripts for dev, build, lint, and typecheck. Here's the `package.json`:
 
 ```json
 {
   "name": "my-plugin",
   "version": "0.1.0",
   "main": "index.ts",
+  "type": "module",
   "hydris": {
-    "compat": "<0.1.0"
+    "compat": ">=0.0.20 <0.1.0"
+  },
+  "scripts": {
+    "dev": "hydris plugin run index.ts --watch --server localhost:50051",
+    "build": "hydris plugin build .",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "tsc"
   },
   "dependencies": {
     "@projectqai/proto": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13",
+    "@types/bun": "1.3.13",
+    "typescript": "^5.8.0"
   }
 }
 ```
 
 `hydris.compat` is a [semver range](https://github.com/blang/semver#ranges) declaring which Hydris versions this plugin supports. Checked at startup. Optional, but recommended.
 
+There's also a `tsconfig.json` and `biome.json` already set up. If you're on VS Code or Cursor the formatter works out of the box; for other editors see the [Biome editor guide](https://biomejs.dev/guides/integrate-in-editor/).
+
 ## Watch the world
 
-Every plugin starts with `attach` from `@projectqai/proto/device`. This connects to the Hydris engine, registers the plugin as a device entity, and calls your `run` function. Let's start simple — just watch the world and see what's going on:
+Every plugin starts with `attach` from `@projectqai/proto/device`. This connects to the Hydris engine, registers the plugin as a device entity, and calls your `run` function. The template gives you this out of the box — let's walk through it:
 
 ```typescript
 import {
-  create, EntityFilterSchema, ListEntitiesRequestSchema,
-  EntityChange, attach
+  attach,
+  create,
+  EntityChange,
+  EntityFilterSchema,
+  ListEntitiesRequestSchema,
 } from "@projectqai/proto/device";
 
 await attach({
-  // Unique ID for this plugin instance. Shows up as an entity in the world.
   id: "my-plugin.service",
   label: "My Plugin",
-
-  // Controller name groups related plugins together in the UI.
   controller: "my-plugin",
   device: { category: "Custom" },
 
-  // run is called once the plugin is connected and registered.
-  // - client: a gRPC client to the Hydris engine
-  // - config: user-provided config values (more on this later)
-  // - signal: aborted when the plugin should shut down
   run: async (client, config, signal) => {
-
-    // Open a streaming watch on all entities in the world.
-    // An empty filter means everything. behaviour.maxRateHz
-    // throttles how often we receive updates.
     const stream = client.watchEntities(
       create(ListEntitiesRequestSchema, {
         filter: create(EntityFilterSchema, {}),
         behaviour: { maxRateHz: 1 },
       }),
-      { signal }
+      { signal },
     );
 
-    // The stream yields events as entities are created, updated, or deleted.
     for await (const event of stream) {
       if (!event.entity) continue;
 
-      console.log(event.t === EntityChange.EntityChangeUpdated ? "updated" : "other",
-        event.entity.id, event.entity.label);
+      console.log(
+        event.t === EntityChange.EntityChangeUpdated ? "updated" : "other",
+        event.entity.id,
+        event.entity.label,
+      );
     }
   },
 });
 ```
 
-Load it into a running engine to test:
+- `id` — unique entity ID for this plugin instance, shows up in the world
+- `controller` — groups related plugins in the UI
+- `run` — called with a gRPC client, typed config (more on this later), and an `AbortSignal`
+- The empty filter watches everything; `maxRateHz` throttles update frequency
+
+Fire it up and you should see entities streaming by:
 
 ```bash
-hydris plugin run index.ts
+bun run dev
 ```
 
 This bundles the TypeScript, uploads it to the engine, and runs it in-process. Logs stream back to your terminal. Press Ctrl+C to unload.
@@ -96,10 +109,17 @@ We can filter for specific entities, enrich them with your own data, and push ch
 
 ```typescript
 import {
-  create, EntitySchema, EntityFilterSchema,
-  ListEntitiesRequestSchema, EntityChange,
-  attach, push
+  attach,
+  create,
+  EntityChange,
+  EntityFilterSchema,
+  EntitySchema,
+  ListEntitiesRequestSchema,
+  push,
 } from "@projectqai/proto/device";
+
+let seenCount = 0;
+let enrichedCount = 0;
 
 await attach({
   id: "my-plugin.service",
@@ -107,62 +127,59 @@ await attach({
   controller: "my-plugin",
   device: { category: "Custom" },
 
-  // Declare a config schema — users can tweak these in the UI.
-  // The config object passed to run() is typed from this.
   schema: {
-    verbose: {
+    enabled: {
       type: "boolean",
-      title: "Verbose logging",
-      default: false,
+      title: "Enable enrichment",
+      default: true,
     },
   } as const,
+  config: { enabled: true },
 
   run: async (client, config, signal) => {
-
-    // This time, filter to only entities with a transponder component (field 27).
-    // Check the component reference for all available field numbers.
     const stream = client.watchEntities(
       create(ListEntitiesRequestSchema, {
         filter: create(EntityFilterSchema, { component: [27] }),
         behaviour: { maxRateHz: 1 },
       }),
-      { signal }
+      { signal },
     );
 
     for await (const event of stream) {
-      // Only act on updates — skip deletes and other event types.
       if (event.t !== EntityChange.EntityChangeUpdated) continue;
       if (!event.entity) continue;
 
-      if (config.verbose) console.log("saw", event.entity.id);
+      seenCount++;
 
-      // Create an entity with the same ID — this merges with the existing one.
-      // You only need to set the fields you want to add or change.
+      if (!config.enabled) continue;
+
       const enriched = create(EntitySchema, {
         id: event.entity.id,
         label: "Enriched: " + event.entity.id,
       });
 
-      // push() sends it back to the engine where it merges using
-      // last-writer-wins per component.
       await push(client, enriched);
+      enrichedCount++;
     }
   },
 
-  // Report health metrics that show up in the UI under this device.
   health: () => ({
-    1: { label: "status", value: "running" },
+    1: { label: "entities seen", value: seenCount },
+    2: { label: "entities enriched", value: enrichedCount },
   }),
 });
 ```
 
-## Development workflow
+What changed from the first example:
 
-During development, `hydris plugin run` uploads your plugin to the engine and runs it in-process. Logs stream back to your terminal:
+- `schema` and `config` — declare config fields that users can toggle in the UI. The `config` argument in `run()` is typed from the schema.
+- `component: [27]` — only watch entities with a transponder. See the [component reference](/docs/developer/components) for all field numbers.
+- `push()` — create an entity with the same ID, set the fields you want to add, and push it back. The engine merges using last-writer-wins per component.
+- `health()` — called every 10 seconds. The metrics show up in the UI and each call extends the plugin's heartbeat.
 
-```bash
-hydris plugin run index.ts
-```
+## Iterate with watch mode
+
+`bun run dev` already runs with `--watch`, which rebuilds and restarts on file changes. If you need a different server address, edit the `dev` script in `package.json`.
 
 If the engine is on a different host, use `--server`:
 
