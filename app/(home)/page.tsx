@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { DownloadButton } from '../../components/DownloadButton';
 
 export default function HomePage() {
 	return (
@@ -38,24 +39,14 @@ export default function HomePage() {
 							no point-to-point complexity.
 						</p>
 
-						<div className="flex flex-wrap gap-4">
+						<div className="flex flex-wrap items-start gap-4">
+							<DownloadButton />
 							<Link
 								href="/docs"
-								className="inline-flex items-center gap-2 px-8 py-3 bg-green-500 hover:bg-green-400 text-black rounded-lg font-semibold transition-all duration-200 shadow-lg shadow-green-500/30 hover:shadow-green-500/50"
+								className="inline-flex items-center gap-2 px-8 py-3 h-[48px] border-2 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 text-black dark:text-white rounded-lg font-semibold transition-all duration-200"
 							>
 								Get Started
-								<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-									<path d="M5 12h14M12 5l7 7-7 7"/>
-								</svg>
 							</Link>
-							<a
-								href="https://github.com/projectqai/hydris"
-								className="inline-flex items-center gap-2 px-8 py-3 border-2 border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-600 bg-transparent hover:bg-gray-50 dark:hover:bg-gray-900 text-black dark:text-white rounded-lg font-semibold transition-all duration-200"
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								View on GitHub
-							</a>
 						</div>
 					</div>
 				</div>
