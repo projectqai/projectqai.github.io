@@ -1077,6 +1077,215 @@ await stream.close();
 
 ---
 
+## GNSS
+
+### GnssComponent
+
+Quality metadata for a GNSS (GPS) position fix. Always used alongside `GeoSpatialComponent` to describe how reliable the reported position is.
+
+**Fields:**
+- `fix_type` (GnssFixType, optional) - Fix quality: `None`, `Fix2D`, `Fix3D`, `DGPS`, `RtkFloat`, `RtkFixed`
+- `satellites_visible` (uint32, optional) - Number of satellites the receiver can see
+- `satellites_used` (uint32, optional) - Number of satellites used in the solution
+- `hdop` (float, optional) - Horizontal dilution of precision
+- `vdop` (float, optional) - Vertical dilution of precision
+- `pdop` (float, optional) - Position (3D) dilution of precision
+
+**Example:**
+```typescript
+gnss: {
+  fixType: GnssFixType.Fix3D,
+  satellitesVisible: 12,
+  satellitesUsed: 8,
+  hdop: 1.2,
+  vdop: 1.8,
+  pdop: 2.1,
+}
+```
+
+**When to use:** Any entity whose position comes from a GNSS receiver — drones, vehicles, handheld trackers, EdgeTX telemetry. Operators can use the fix type and DOP values to judge how much to trust the reported location.
+
+---
+
+## Metrics
+
+### MetricComponent
+
+A collection of strongly-typed sensor readings on an entity. Each metric carries a kind, unit, value, and optional alerting level, making it self-describing for display and downstream processing.
+
+**Fields:**
+- `metrics` (Metric[]) - One or more metric readings
+
+**Metric fields:**
+- `unit` (MetricUnit) - Physical unit (e.g. `MetricUnitCelsius`, `MetricUnitPercent`, `MetricUnitMeterPerSecond`)
+- `id` (uint32, optional) - Stable identifier, unique within this entity
+- `kind` (MetricKind, optional) - What is being measured (e.g. `MetricKindTemperature`, `MetricKindHeartRate`, `MetricKindWindSpeed`)
+- `label` (string, optional) - Human-readable display name, e.g. "Engine Bay Temperature"
+- `measured_at` (Timestamp, optional) - When the reading was taken
+- `range` (MetricRange, optional) - Expected min/max bounds for the sensor
+- `clipping` (SensorClip, optional) - `SensorClipHigh` or `SensorClipLow` when the sensor range is exceeded
+- `val` (oneof) - The reading: `double`, `float`, `sint64`, or `uint64`
+- `alerting` (AlertLevel, optional) - `None`, `Warning`, `Alarm`, or `Critical`
+
+**Example — weather station:**
+```typescript
+metric: {
+  metrics: [
+    {
+      kind: MetricKind.MetricKindTemperature,
+      unit: MetricUnit.MetricUnitCelsius,
+      label: "Temperature",
+      id: 1,
+      measuredAt: now,
+      val: { case: "double", value: 14.3 },
+    },
+    {
+      kind: MetricKind.MetricKindWindSpeed,
+      unit: MetricUnit.MetricUnitMeterPerSecond,
+      label: "Wind Speed",
+      id: 2,
+      measuredAt: now,
+      val: { case: "double", value: 8.7 },
+    },
+  ],
+}
+```
+
+**Example — CBRN hazard with alert:**
+```typescript
+metric: {
+  metrics: [{
+    kind: MetricKind.MetricKindRadiationHazard,
+    unit: MetricUnit.MetricUnitMicrosievertPerHour,
+    label: "Dose Rate",
+    id: 1,
+    measuredAt: now,
+    val: { case: "double", value: 3.2 },
+    alerting: AlertLevel.Alarm,
+  }],
+}
+```
+
+**When to use:** Environmental sensors (temperature, humidity, pressure, wind), vital signs monitors (heart rate, SpO2, body temperature), CBRN detectors, or any entity that reports numeric readings. Pair with `SensorComponent` and `DeviceComponent` for a complete sensor station.
+
+---
+
+## Communication
+
+### ChatComponent
+
+A single chat message in the common operating picture. Each message is its own entity with a lifetime, so messages naturally expire and can be routed across nodes.
+
+**Fields:**
+- `sender` (string, optional) - Entity ID of the sender
+- `to` (string, optional) - Entity ID of the recipient (if known)
+- `message` (string) - Message text
+- `reply_to` (string, optional) - ID of the chat entity this replies to. Falls back to a regular message if the downstream doesn't support replies
+- `reaction` (bool, optional) - When true, this is a reaction rather than a text reply. Falls back to a regular reply if unsupported
+
+**Example:**
+```typescript
+{
+  id: "team1.chat.42.0",
+  label: "Alice",
+  routing: { channels: [{}] },
+  chat: {
+    sender: "team1.alice",
+    message: "Reached waypoint bravo, visibility is poor",
+  },
+  lifetime: {
+    from: now,
+    until: oneHourFromNow,
+  },
+}
+```
+
+**When to use:** Tactical messaging between operators, sensor-generated status reports, or bridging external messaging systems (e.g. Meshtastic text) into the COP.
+
+---
+
+## Assembly
+
+### AssemblyComponent
+
+Groups entities into a logical assembly — for example, a vehicle and its attached sensors, or a soldier and their gear. The `parent` field creates a hierarchy distinct from the spatial pose tree.
+
+**Fields:**
+- `parent` (string, optional) - Entity ID of the parent assembly
+- `outline` (string[], optional) - Entity IDs of `GeoShapeComponent` entities that describe the outline of this assembly
+
+**Example:**
+```typescript
+// Wind sensor attached to a hiker
+{
+  id: "hiker-1.wind",
+  label: "Wind Sensor",
+  device: { parent: "hiker-1", state: DeviceState.DeviceStateActive },
+  assembly: { parent: "hiker-1" },
+  pose: {
+    parent: "hiker-1",
+    offset: { case: "cartesian", value: { upM: 0.3 } },
+  },
+  metric: { metrics: [/* ... */] },
+}
+```
+
+**When to use:** Sensors mounted on vehicles or personnel, sub-devices of a larger platform, or any entity that logically belongs to another. Typically combined with `PoseComponent` (spatial relationship) and `DeviceComponent` (device hierarchy).
+
+---
+
+## Map Overlays
+
+### MapLayerComponent
+
+A toggleable overlay rendered on top of the base map. Supports either XYZ tile layers or a single georeferenced image.
+
+**Fields:**
+- `z_index` (int32) - Draw order relative to other layers
+- `opacity` (float) - Layer opacity, 0.0 (transparent) to 1.0 (opaque)
+- `tiles` (Tile) - XYZ tile source
+  - `url` (string) - Tile URL template, e.g. `https://.../{z}/{x}/{y}.png`
+- `image` (Image) - Single georeferenced bitmap
+  - `url` (string) - Image URL
+  - `west` (double) - Western bound in WGS84 degrees
+  - `south` (double) - Southern bound
+  - `east` (double) - Eastern bound
+  - `north` (double) - Northern bound
+
+**Example — tile layer:**
+```typescript
+mapLayer: {
+  zIndex: 10,
+  opacity: 0.7,
+  source: {
+    case: "tiles",
+    value: { url: "https://tiles.example.com/{z}/{x}/{y}.png" },
+  },
+}
+```
+
+**Example — georeferenced image:**
+```typescript
+mapLayer: {
+  zIndex: 5,
+  opacity: 0.9,
+  source: {
+    case: "image",
+    value: {
+      url: "https://example.com/overlay.png",
+      west: 13.3,
+      south: 52.4,
+      east: 13.5,
+      north: 52.6,
+    },
+  },
+}
+```
+
+**When to use:** Weather radar overlays, satellite imagery, heatmaps, zone overlays, or any raster layer that should be displayed on the map alongside entities.
+
+---
+
 ## Component Combinations
 
 ### Common Patterns
@@ -1140,6 +1349,22 @@ await stream.close();
 **IoT Device:**
 ```typescript
 { id, geo, capture, link, power }
+```
+
+**Weather Station:**
+```typescript
+{ id, geo, symbol, sensor, metric, device, link, power }
+```
+
+**Personnel with Sensors:**
+```typescript
+{ id, geo, symbol, gnss, mission }
+// + child entities with assembly, pose, device, metric
+```
+
+**Chat Message:**
+```typescript
+{ id, label, routing, chat, lifetime }
 ```
 
 ## Next Steps
