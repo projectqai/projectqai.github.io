@@ -1,0 +1,72 @@
+---
+title: ADS-B
+description: Track aircraft in real time using ADS-B data from adsb.lol
+---
+
+The ADS-B integration tracks aircraft in real time using data from [adsb.lol](https://www.adsb.lol/), a community-driven ADS-B aggregation network. It polls the public API and creates aircraft entities with position, velocity, transponder identity, and symbology.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **ADS-B** under **Feeds** in the sidebar
+3. Select a poller type and click **Create**
+4. Fill in the settings for your chosen poller and click **Apply Configuration**
+
+Aircraft will begin appearing on the map within a few seconds.
+
+## Poller Types
+
+### Location
+
+Track all aircraft within a radius of a geographic point.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Latitude | *required* | Center latitude (-90 to 90) |
+| Longitude | *required* | Center longitude (-180 to 180) |
+| Radius (NM) | `50` | Search radius in nautical miles (minimum 1) |
+| Interval Seconds | `5` | Poll interval in seconds |
+
+### Military
+
+Track military aircraft worldwide. No location filter required.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Interval Seconds | `5` | Poll interval in seconds |
+
+### Callsign
+
+Track a specific aircraft by callsign.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Callsign | *required* | Aircraft callsign (e.g. `BAW123`) |
+| Interval Seconds | `5` | Poll interval in seconds |
+
+### ICAO
+
+Track a specific aircraft by ICAO hex address.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| ICAO | *required* | ICAO hex address (e.g. `A0B1C2`) |
+| Interval Seconds | `5` | Poll interval in seconds |
+
+## Data Flow
+
+Inbound only. The integration polls the adsb.lol REST API at the configured interval. All position computation happens server-side — Hydris receives ready-to-use aircraft state.
+
+## Entity Mapping
+
+Aircraft entities are created with the ID format `icao:{hex}` (e.g. `icao:a0b1c2`).
+
+| ADS-B Field | Hydris Component |
+|-------------|-----------------|
+| Position (lat, lon, altitude) | `geo` (with NACp-based covariance) |
+| Ground speed + track | `kinematics` (ENU velocity with NACv-based covariance) |
+| Heading / track | `orientation` (quaternion) |
+| ICAO address, flight ID | `transponder.adsb` |
+| Callsign or registration | `label` |
+| Aircraft type | `symbol` (MIL-STD-2525C, varies by type and affiliation) |
+| Nav status, squawk | `navigation` (emergency status from squawk codes) |

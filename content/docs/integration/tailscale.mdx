@@ -1,0 +1,35 @@
+---
+title: Tailscale
+description: Discover Hydris peers on your Tailscale network
+---
+
+The Tailscale integration monitors your [Tailscale](https://tailscale.com/) network and discovers other Hydris nodes on the mesh. Each Tailscale peer appears as an entity showing its hostname, IP address, and online status. Peers running Hydris are automatically identified and enriched with node metadata.
+
+## Setup
+
+No configuration is required. When Tailscale is running on the host, Hydris automatically connects to the Tailscale daemon and begins discovering peers.
+
+The integration communicates with `tailscaled` via its Unix socket at `/var/run/tailscale/tailscaled.sock`.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Enabled | `true` | Enable or disable peer discovery |
+
+## Entity Mapping
+
+Peer entities are created with the ID format `tailscale.peer.{node_id}.{peer_id}`.
+
+| Field | Hydris Component |
+|-------|-----------------|
+| Hostname, OS | `label` (e.g. "ubuntu-machine (Linux)") |
+| Tailscale IP | `device` (IP address) |
+| Online / offline | `link` (connected or lost) |
+| Remote Hydris node info | `device` (node metadata, if peer runs Hydris) |
+
+## Hydris Peer Detection
+
+For each online peer, the integration probes port 50051 (the default Hydris gRPC port) to check if the peer is running a Hydris node. When a Hydris instance is found, the peer entity is enriched with the remote node's device information.
+
+Peers are refreshed every 60 seconds with a 2-minute TTL.

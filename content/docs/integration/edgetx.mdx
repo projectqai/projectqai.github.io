@@ -1,0 +1,45 @@
+---
+title: EdgeTX
+description: Receive drone and RC vehicle telemetry from EdgeTX/OpenTX radios
+---
+
+The EdgeTX integration receives real-time telemetry from drones and RC vehicles via [EdgeTX](https://edgetx.org/) or [OpenTX](https://www.open-tx.org/) radio transmitters. It reads CRSF (Crossfire) telemetry over USB serial and creates vehicle entities with position, attitude, battery state, link quality, and flight mode.
+
+## Setup
+
+1. On the radio, enable **USB telemetry mirroring** — this is not enabled by default. In EdgeTX, go to **System → Hardware → Serial Port** and set the USB mode to **CRSF** or **Telemetry Mirror**
+2. Plug the radio into a USB port on the device running Hydris
+3. Hydris detects the radio automatically and begins receiving telemetry
+
+To verify or disable the integration, open the command menu (`Ctrl+K` / `⌘+K`), select **Configuration**, and navigate to **Vehicles -> EdgeTX**.
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Enabled | `true` | Enable or disable the device |
+
+## Data Flow
+
+Inbound only. The integration reads CRSF telemetry frames from the radio's USB serial port at 400 kbps. No commands are sent to the vehicle.
+
+## Entity Mapping
+
+Vehicle entities are created with the ID format `edgetx.device.{usb_device_id}`.
+
+| CRSF Frame | Hydris Component |
+|------------|-----------------|
+| GPS | `geo` (lat, lon, altitude), `kinematics` (ground speed → ENU velocity), `gnss` (fix type, satellites) |
+| Attitude | `orientation` (roll/pitch/yaw → quaternion) |
+| Battery | `power` (voltage, current, capacity used, charge remaining) |
+| Link Stats | `link` (RSSI, SNR, link quality, TX power, RF mode, packet rate) |
+| Flight Mode | `navigation` (flight mode, failsafe detection) |
+| Vario | `kinematics` (vertical speed) |
+
+## Device Detection
+
+The integration recognizes USB devices with:
+- Vendor ID `0x0483`, Product ID `0x5740`
+- Manufacturer name starting with "OpenTX" or "EdgeTX"
+
+When a matching device appears, Hydris opens the serial port and begins parsing CRSF frames immediately.

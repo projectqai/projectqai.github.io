@@ -1,0 +1,70 @@
+---
+title: Axis
+description: IP camera integration with RTSP streams and PTZ control for Axis cameras
+---
+
+The Axis integration connects [Axis Communications](https://www.axis.com/) IP cameras to Hydris, providing live video streams (RTSP, MJPEG, and snapshots) and bidirectional PTZ control. Cameras can be discovered automatically via ONVIF or configured manually.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **Axis** under **Cameras** in the sidebar
+3. Set the default **Username** and **Password** for your cameras and click **Apply Configuration**
+
+With **Auto Probe** enabled (the default), Axis cameras on the local network are discovered and connected automatically via ONVIF. You can also add cameras manually by selecting **Camera** and clicking **Create**, then entering the camera's IP address.
+
+## Service Settings
+
+These apply to all cameras managed by this integration:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Username | `root` | Default credentials for all cameras |
+| Password | | Default password |
+| Auto Probe | `true` | Automatically connect cameras found by ONVIF discovery |
+
+## Camera Settings
+
+Per-camera overrides, shown when you select a camera in the sidebar:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Host | *required* | Camera IP address or hostname |
+| Username | *(service default)* | Override username |
+| Password | *(service default)* | Override password |
+
+## Discovery
+
+Cameras are discovered through ONVIF WS-Discovery. When **Auto Probe** is enabled, the integration attempts to identify discovered ONVIF devices as Axis cameras by probing the VAPIX API. Confirmed Axis cameras are automatically connected.
+
+## Entity Mapping
+
+Camera entities are created with the ID format `axis.device.{mac_or_ip}`.
+
+| Field | Hydris Component |
+|-------|-----------------|
+| RTSP stream | `camera` (RTSP URL) |
+| MJPEG stream | `camera` (MJPEG URL) |
+| HTTP snapshot | `camera` (snapshot URL) |
+| Model + serial | `label`, `device` (hardware ID) |
+
+### PTZ Cameras
+
+For PTZ-capable models, Hydris creates a focal point entity (`{camera_id}~fp`) that represents where the camera is looking. The focal point has a `PoseComponent` with a polar offset (azimuth, elevation, range) relative to the camera.
+
+You can control the camera in two ways:
+
+- **UI:** Move the focal point on the map or in the camera view. Hydris sends absolute PTZ commands to the camera via the VAPIX API.
+- **TargetPoseComponent:** Any system — a plugin, the API, or a user action — can write a `TargetPoseComponent` onto the focal point entity. The camera driver continuously slews the physical gimbal toward this target pose.
+
+The integration polls the camera every 5 seconds and reflects external PTZ movements back into the entity.
+
+### Behaviour Plugins
+
+Because the camera is driven by `TargetPoseComponent`, you can build custom behaviour plugins that automate camera movement — for example slew-to-cue, patrol patterns, or follow-me tracking. A plugin watches for events (tracks, detections, user actions), computes the desired azimuth/elevation/range, and writes a `TargetPoseComponent` onto the camera's focal point entity. The camera driver handles the rest.
+
+The built-in **Autocue** plugin (`core/plugins/cue/`) is a reference implementation that aims all PTZ cameras at detected tracks. You can enable it under **Plugins → Autocue** in the configuration menu to test slew-to-cue behaviour. See [Plugins](/docs/developer/plugins) for how to build your own.
+
+### Wiper Control
+
+For cameras that support the Axis clear-view API, a taskable entity (`{camera_id}~wiper`) is created. Running the task triggers the camera's wiper or washer.
