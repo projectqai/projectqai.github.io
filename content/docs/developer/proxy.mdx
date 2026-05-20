@@ -1,0 +1,40 @@
+---
+title: Remote Access
+description: Operate a remote Hydris node via the built-in proxy
+---
+
+When connecting to a remote Hydris node, the default [policy](/docs/developer/policy) blocks writes from non-localhost connections. The **proxy** lets you operate a remote node as if you were local — it serves the UI locally and forwards all API requests to the remote, so the remote node sees them as trusted.
+
+## Usage
+
+```bash
+hydris --server host:port
+```
+
+This starts a local HTTP server (default port 8080, override with `PORT` env var) that serves the UI locally while connected to a remote node. The remote sees requests from localhost, so the default policy allows full read/write access.
+
+## Tunnel Support
+
+For nodes not directly reachable, the proxy supports SSH and WireGuard tunnels:
+
+| Format | Description |
+|--------|-------------|
+| `host:port` | Direct connection |
+| `ssh://[user@]host[:port]` | SSH tunnel — gRPC is reached at `localhost:50051` on the remote |
+| `--wg /path/to/wg.conf` | WireGuard tunnel — requires `--server host:port` for the remote address inside the tunnel |
+
+### SSH
+
+```bash
+hydris --server ssh://user@remote-host
+```
+
+Opens an SSH tunnel to the remote host and forwards gRPC traffic through it. The remote Hydris node is expected to listen on `localhost:50051` on the remote machine. SSH key authentication is used.
+
+### WireGuard
+
+```bash
+hydris --server 10.0.0.2:50051 --wg /path/to/wg.conf
+```
+
+Establishes a WireGuard tunnel using the provided config file. The `--server` address is the remote node's address inside the WireGuard network.

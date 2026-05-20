@@ -14,7 +14,7 @@ When no policy has been set explicitly, the node creates a default policy:
 
 - Remote peers cannot reset the node or change its policy
 - Local connections (localhost) can do anything
-- Remote peers can read but not write
+- Remote peers can read but not write (use the [proxy](/docs/developer/proxy) to operate a remote node with full access)
 - Entity-level policies are evaluated via Defer
 - Everything else is denied
 
