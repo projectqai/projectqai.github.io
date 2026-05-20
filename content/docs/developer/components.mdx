@@ -1286,6 +1286,46 @@ mapLayer: {
 
 ---
 
+## Access Control
+
+### PolicyComponent
+
+CEL-based access policy evaluated on incoming requests. Attach to the node entity for global rules, or to individual entities for per-entity access control (reached via `Defer` in the node policy).
+
+**Fields:**
+- `rules` (PolicyRule[]) - Rules evaluated top to bottom; first match wins
+
+**PolicyRule fields:**
+- `action` (PolicyAction) - `Allow`, `Deny`, `Log`, or `Defer`
+- `cel` (string, optional) - [CEL](https://cel.dev/) condition. Omit for unconditional match
+
+**Example — node policy:**
+```typescript
+policy: {
+  rules: [
+    { action: PolicyAction.Deny,  cel: 'is.reset && !is.trusted' },
+    { action: PolicyAction.Deny,  cel: 'is.write && !is.trusted && has(change.policy)' },
+    { action: PolicyAction.Allow, cel: 'is.read || is.trusted' },
+    { action: PolicyAction.Defer },
+    { action: PolicyAction.Deny },
+  ],
+}
+```
+
+**Example — entity-level policy:**
+```typescript
+policy: {
+  rules: [
+    { action: PolicyAction.Allow, cel: 'source.address.inCIDR("10.0.0.0/8")' },
+    { action: PolicyAction.Deny },
+  ],
+}
+```
+
+**When to use:** Restrict who can read or write entities, log access for auditing, or delegate per-entity permissions. See the full [Policy reference](/docs/developer/policy) for available CEL variables, functions, and examples.
+
+---
+
 ## Component Combinations
 
 ### Common Patterns

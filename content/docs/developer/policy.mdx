@@ -1,0 +1,178 @@
+---
+title: Policy
+description: Control access to the node with CEL-based policy rules
+---
+
+## Node Policy
+
+Every hydris node has a policy — a short list of rules that decides which requests are
+allowed and which are denied. The policy lives on the node entity as a
+[`PolicyComponent`](/docs/developer/components#policycomponent) and is evaluated on
+every incoming request.
+
+When no policy has been set explicitly, the node creates a default policy:
+
+- Remote peers cannot reset the node or change its policy
+- Local connections (localhost) can do anything
+- Remote peers can read but not write
+- Entity-level policies are evaluated via Defer
+- Everything else is denied
+
+## Rules
+
+A policy is a list of rules evaluated **top to bottom**. Each rule has an **action** and
+an optional **condition** written in [CEL](https://cel.dev/). The first rule whose
+condition matches produces the verdict.
+
+```
+1. Allow  if  is.trusted
+2. Allow  if  source.address.inCIDR("10.0.0.0/8")
+3. Allow  if  is.read
+4. Deny
+```
+
+This policy says: allow everything from localhost, allow everything from the `10.0.0.0/8`
+subnet, allow reads from anywhere, deny everything else.
+
+A rule without a condition matches unconditionally — the `Deny` at the end is a catch-all.
+If no rule matches at all, the request is allowed implicitly, so you almost always want a
+catch-all at the bottom.
+
+There are four actions:
+
+| Action  | Effect |
+|---------|--------|
+| `Allow` | Accept the request. Stop evaluating. |
+| `Deny`  | Reject the request. Stop evaluating. |
+| `Log`   | Record the match for auditing, then continue to the next rule. |
+| `Defer` | Jump to the entity's own policy chain. See [Entity-Level Policies](#entity-level-policies). |
+
+## Conditions
+
+Conditions are [CEL expressions](https://cel.dev/) with access to information about the
+request. The most common variables are `is.*` flags and `source.*` fields.
+
+### `is` flags
+
+| Flag | Meaning |
+|------|---------|
+| `is.trusted` | Connection originates from localhost |
+| `is.read` | Read operation |
+| `is.write` | Write operation |
+| `is.http` | Request arrived over HTTP |
+| `is.grpc` | Request arrived over gRPC |
+| `is.get` | GetEntity |
+| `is.list` | ListEntities |
+| `is.watch` | WatchEntities |
+| `is.push` | EntityChange push |
+| `is.create` | Pushing a new entity (ID not yet in world) |
+| `is.update` | Pushing changes to an existing entity |
+| `is.replace` | Entity replacement |
+| `is.expire` | Entity expiration |
+| `is.task` | RunTask |
+| `is.reset` | HardReset |
+| `is.upload` | Artifact upload |
+
+### `source` — peer information
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source.address` | string | IP address of the connecting peer |
+| `source.port` | string | Port of the connecting peer |
+| `source.builtin` | string | Name of the builtin service (e.g. `"federation"`), empty for external connections |
+
+### `change` — the entity being modified
+
+Available on write operations. A full `world.Entity` protobuf — use `has()` to check
+for the presence of components:
+
+```
+has(change.camera)
+has(change.policy)
+change.controller.node == "some-node-id"
+```
+
+### `method` and `path`
+
+Set for HTTP requests only (empty for gRPC):
+
+```
+is.http && method == "GET" && path == "/media/snapshot"
+```
+
+### Custom functions
+
+**`head(entityID)`** looks up an entity in the current world state. Returns an empty
+entity if not found.
+
+```
+head("sensor.1").controller.node == "abc"
+```
+
+**`source.address.inCIDR(cidr)`** checks whether the source IP falls within a CIDR range.
+
+```
+source.address.inCIDR("192.168.1.0/24")
+```
+
+## Default Policy
+
+For reference, the built-in default policy looks like this:
+
+```
+1. Deny   if  is.reset && !is.trusted
+2. Deny   if  is.write && !is.trusted && has(change.policy)
+3. Allow  if  is.read || is.trusted
+4. Defer
+5. Deny
+```
+
+## Entity-Level Policies
+
+The `Defer` action jumps from the node policy into a policy chain attached to the entity
+being modified. This lets you set per-entity access rules without touching the global policy.
+
+If the entity has no policy, Defer falls back to the policy on the entity's controller node.
+If neither has a policy, Defer does nothing and evaluation continues with the next node-level
+rule.
+
+For example, a global policy that defers write decisions to each entity:
+
+**Node policy:**
+```
+1. Allow  if  is.read || is.trusted
+2. Defer
+3. Deny
+```
+
+**Policy on `camera.1`:**
+```
+1. Allow  if  source.address.inCIDR("10.0.0.0/8")
+2. Deny
+```
+
+Remote reads are allowed globally. Remote writes to `camera.1` are only allowed from the
+`10.0.0.0/8` subnet. Writes to entities without their own policy are denied by rule 3.
+
+## Examples
+
+### Log remote writes for auditing
+
+```
+1. Log    if  is.write && !is.trusted
+2. Deny   if  is.reset && !is.trusted
+3. Allow  if  is.read || is.trusted
+4. Defer
+5. Deny
+```
+
+The `Log` action doesn't produce a verdict — it records the match and moves on.
+
+### Block creation of camera entities from remote peers
+
+Attach to an entity, then Defer to it from the node policy:
+
+```
+1. Deny   if  is.create && has(change.camera)
+2. Allow
+```
