@@ -12,6 +12,7 @@
     "edgetx",
     "reolink",
     "axis",
+    "external-detectors",
     "tailscale",
     "object-storage",
     "grpc"

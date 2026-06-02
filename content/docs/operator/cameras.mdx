@@ -37,3 +37,7 @@ To configure a camera, select it in the entity list or on the map and click **Co
 When Field of View, Range, and Heading are either auto detected or configured, the camera displays a **detection cone** on the map along with a **focal point**, giving you a visual representation of what the camera is currently looking at.
 
 As a developer, you may also use [target poses](/docs/developer/components#targetposecomponent) to make the camera point somewhere else by changing its focal point.
+
+## External Detections
+
+If you run your own computer-vision pipeline (YOLO, custom models, etc.) against a camera stream, you can push detections into Hydris via the API. The engine links them back to the camera entity and computes world-space bearings from the bounding box. See the [External Detectors](/docs/integration/external-detectors) integration guide for a full walkthrough.

@@ -292,23 +292,49 @@ interactivity: {
 
 ### DetectionComponent
 
-Links a detection to its source sensor and provides classification.
+Links a detection to its source sensor and provides evidence, bounding box, and confidence.
 
 **Fields:**
 - `detectorEntityId` (string, optional) - ID of the sensor entity that made this detection
-- `classification` (string, optional) - Type classification (e.g., "drone", "vehicle", "person")
-- `lastMeasured` (Timestamp, optional) - When this detection was last updated
+- `evidence` (string[]) - Entity IDs of evidence that triggered or supports this detection (e.g. the source entity being detected)
+- `image_bbox` (ImageBoundingBox, optional) - Bounding box in the detector's video frame
+- `confidence` (float, optional) - Detection confidence score (0.0–1.0)
 
-**Example:**
+**ImageBoundingBox fields:**
+- `x` (uint32) - Left edge of the bounding box in pixels
+- `y` (uint32) - Top edge of the bounding box in pixels
+- `width` (uint32) - Bounding box width in pixels
+- `height` (uint32) - Bounding box height in pixels
+- `frame_width` (uint32) - Full video frame width in pixels
+- `frame_height` (uint32) - Full video frame height in pixels
+
+**Example — camera detection with bounding box:**
 ```typescript
 detection: {
-  detectorEntityId: 'radar-1',
-  classification: 'drone',
-  lastMeasured: new Date('2025-01-15T10:30:00Z')
+  detectorEntityId: 'camera-north',
+  evidence: ['vessel-123'],
+  confidence: 0.87,
+  imageBbox: {
+    x: 312,
+    y: 140,
+    width: 96,
+    height: 54,
+    frameWidth: 1920,
+    frameHeight: 1080
+  }
 }
 ```
 
-**When to use:** Raw sensor detections before track fusion.
+**Example — radar detection (no bounding box):**
+```typescript
+detection: {
+  detectorEntityId: 'radar-1',
+  evidence: ['track-42'],
+  confidence: 0.95
+}
+```
+
+**When to use:** Raw sensor detections before track fusion. See the [External Detectors](/docs/integration/external-detectors) guide for a full walkthrough of pushing detections from a computer-vision pipeline.
 
 ---
 
@@ -1340,9 +1366,15 @@ policy: {
 { id, geo, symbol, bearing, camera, sensor }
 ```
 
-**Detection:**
+**Detection (positioned):**
 ```typescript
 { id, geo, detection, bearing }
+```
+
+**Camera Detection (with bounding box):**
+```typescript
+{ id, label, detection, controller, priority }
+// detection includes detectorEntityId, evidence, imageBbox, confidence
 ```
 
 **Fused Track:**
