@@ -1,25 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-const VERSION = 'v0.0.22';
+import { releaseFile, releaseUrl } from '@/lib/version';
 
 const platforms = {
 	windows: {
 		label: 'Download for Windows',
-		url: `https://github.com/projectqai/hydris/releases/download/${VERSION}/hydris-desktop-windows-amd64-${VERSION}.zip`,
+		url: releaseUrl('hydris-desktop-windows-amd64', 'zip'),
 	},
 	mac: {
 		label: 'Download for macOS',
-		url: `https://github.com/projectqai/hydris/releases/download/${VERSION}/hydris-desktop-macos-arm64-${VERSION}.zip`,
+		url: releaseUrl('hydris-desktop-macos-arm64', 'zip'),
 	},
 	linux: {
 		label: 'Download for Linux',
-		url: `https://github.com/projectqai/hydris/releases/download/${VERSION}/hydris-cli-linux-amd64-${VERSION}.tar.xz`,
+		url: releaseUrl('hydris-cli-linux-amd64', 'tar.xz'),
 	},
 	android: {
 		label: 'Download for Android',
-		url: `https://github.com/projectqai/hydris/releases/download/${VERSION}/app-release.apk`,
+		url: releaseFile('app-release.apk'),
 	},
 } as const;
 
