@@ -1,25 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { releaseFile, releaseUrl } from '@/lib/version';
+import { fetchIndex, RELEASES_URL } from '@/lib/version';
 
 const platforms = {
-	windows: {
-		label: 'Download for Windows',
-		url: releaseUrl('hydris-desktop-windows-amd64', 'zip'),
-	},
-	mac: {
-		label: 'Download for macOS',
-		url: releaseUrl('hydris-desktop-macos-arm64', 'zip'),
-	},
-	linux: {
-		label: 'Download for Linux',
-		url: releaseUrl('hydris-cli-linux-amd64', 'tar.xz'),
-	},
-	android: {
-		label: 'Download for Android',
-		url: releaseFile('app-release.apk'),
-	},
+	windows: { label: 'Download for Windows', asset: 'hydris-desktop-windows-amd64' },
+	mac: { label: 'Download for macOS', asset: 'hydris-desktop-macos-arm64' },
+	linux: { label: 'Download for Linux', asset: 'hydris-cli-linux-amd64' },
+	android: { label: 'Download for Android', asset: 'hydris-android' },
 } as const;
 
 type Platform = keyof typeof platforms;
@@ -34,18 +22,23 @@ function detectPlatform(): Platform {
 
 export function DownloadButton() {
 	const [platform, setPlatform] = useState<Platform | null>(null);
+	const [distribution, setDistribution] = useState<Record<string, string>>();
 
 	useEffect(() => {
 		setPlatform(detectPlatform());
+		fetchIndex()
+			.then((i) => setDistribution(i.distribution))
+			.catch(() => {});
 	}, []);
 
 	const info = platform ? platforms[platform] : platforms.linux;
 	const label = platform ? info.label : 'Download HYDRIS';
+	const url = distribution?.[info.asset] ?? RELEASES_URL;
 
 	return (
 		<div className="flex flex-col items-start gap-2">
 			<a
-				href={info.url}
+				href={url}
 				className="inline-flex items-center gap-2 px-8 py-3 bg-green-500 hover:bg-green-400 text-black rounded-lg font-semibold transition-all duration-200 shadow-lg shadow-green-500/30 hover:shadow-green-500/50"
 			>
 				{label}

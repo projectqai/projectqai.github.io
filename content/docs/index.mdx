@@ -5,16 +5,16 @@ description: Home Assistant for The Outdoors
 
 import Link from 'next/link';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
-import { releaseUrl } from '@/lib/version';
+import { ReleaseLink } from '@/components/ReleaseLink';
 
 ## Installing
 
 <Tabs items={['Windows Desktop', 'Mac Desktop', 'macOS', 'Windows', 'Linux', 'Android', 'Docker', 'Kubernetes']}>
   <Tab value="Windows Desktop">
-    Download the latest <a href={releaseUrl('hydris-desktop-windows-amd64', 'zip')}>Windows desktop release</a>, extract it, and run the application.
+    Download the latest <ReleaseLink asset="hydris-desktop-windows-amd64">Windows desktop release</ReleaseLink>, extract it, and run the application.
   </Tab>
   <Tab value="Mac Desktop">
-    Download the latest <a href={releaseUrl('hydris-desktop-macos-arm64', 'zip')}>Mac desktop release</a> and extract it.
+    Download the latest <ReleaseLink asset="hydris-desktop-macos-arm64">Mac desktop release</ReleaseLink> and extract it.
 
     macOS will say that Apple cannot verify the app. To allow it:
 
