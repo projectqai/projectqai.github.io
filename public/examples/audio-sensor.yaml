@@ -1,0 +1,163 @@
+# An acoustic ground sensor, and what it sends when it hears something.
+#
+# Four entities:
+#   example.ugs.dune          the sensor
+#   example.det.seismic1      the contact it reports
+#   example.capture.ugs1      the raw packet from the radio
+#   example.artifact.audio1   the sound file
+#
+# The sensor cannot measure a direction or a distance. It knows only that
+# something is near. It also shows two things the other sensors do not: live
+# readings in a metric component, and raw bytes in a capture component.
+#
+# push it with:  hydris ec apply audio-sensor.yaml
+
+---
+# The sensor. It is buried, it runs on a battery, and its radio link is bad.
+# The device state and the link status report that.
+id: example.ugs.dune
+label: Dune UGS
+
+geo:
+  latitude: 54.1832
+  longitude: 12.0812
+  altitude: 4
+
+device:
+  class: ugs
+  category: Ground
+  state: DeviceStateDegraded
+  error: sensor buried, calibration overdue
+  unique_hardware_id: a84041c6545d1429
+
+link:
+  status: LinkStatusDegraded
+  rssi_dbm: -114
+  link_quality_percent: 22
+
+power:
+  battery_charge_remaining: 0.18
+  voltage: 3.4
+
+# Live readings. Each metric has a kind, a unit, and one value.
+# `id` is unique inside this entity. The engine merges metrics by id, so two
+# writers can update different metrics on the same entity.
+metric:
+  metrics:
+    - id: 1
+      kind: MetricKindSoundLevel
+      unit: MetricUnitDecibelA
+      label: Ambient Noise
+      double: 63.5
+      # this raises the alert state of the entity in the UI
+      alerting: AlertLevelWarning
+      # what the sensor can measure. a UI draws a gauge from it
+      range:
+        min_double: 20
+        max_double: 120
+
+    - id: 2
+      kind: MetricKindTemperature
+      unit: MetricUnitCelsius
+      label: Ground Temperature
+      double: 9.2
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          acoustic: {}
+
+symbol:
+  milStd2525C: SFGPESE---
+
+routing:
+  channels:
+    - {}
+
+---
+# The contact.
+#
+# There is no bearing and no range. Do not invent a position. Give the
+# detection a zero offset and a large covariance. The result is correct: the
+# contact sits on the sensor, inside a circle 2 km wide.
+#
+# Use this shape for any sensor that triggers but cannot locate: a tripwire,
+# a door contact, a chemical alarm.
+#
+# The detection has no symbol. `pending` tells the client that the sensor has
+# not decided what it heard.
+id: example.det.seismic1
+label: Acoustic Trip
+
+controller:
+  id: example.ugs.dune
+
+priority: PriorityImmediate
+
+detection:
+  detectorEntityId: example.ugs.dune
+  confidence: 0.4
+  evidence:
+    - example.artifact.audio1
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.4
+        pending: true
+      person: {}
+
+pose:
+  parent: example.ugs.dune
+  cartesian:
+    covariance:
+      mxx: 4000000
+      myy: 4000000
+
+routing:
+  channels:
+    - {}
+
+---
+# The raw packet.
+#
+# Use a capture component when the bytes have no meaning yet. Keep it next to
+# the device that received it. A later plugin can decode it.
+id: example.capture.ugs1
+label: UGS uplink
+
+capture:
+  captured_by: example.ugs.dune
+  # application port, for example a LoRaWAN FPort
+  port: 2
+  content_type: application/octet-stream
+
+  # protobuf `bytes` fields are base64 in JSON and in YAML
+  payload: AQIDBAU=
+
+  # large payloads go in artifact entities instead
+  content:
+    - example.artifact.audio1
+
+---
+# The sound file.
+# Files are too large for an entity. Put the file in an artifact entity, and
+# refer to its id from anywhere that needs it.
+id: example.artifact.audio1
+label: UGS audio clip
+
+artifact:
+  content_type: audio/wav
+  size_bytes: 96044
+  sha256: 3fdba35f04dc8c462986c992bcf87554db3dbd2c4b0b5a3b5e6b34e4c0e17dc0
+
+  location:
+    - url: https://artifacts.example.org/ugs/3fdba35f.wav
+
+routing:
+  channels:
+    - {}

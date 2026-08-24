@@ -1,0 +1,73 @@
+---
+title: AIS
+description: Receive maritime vessel positions and identity via AIS/NMEA
+---
+
+The AIS integration receives [Automatic Identification System](https://en.wikipedia.org/wiki/Automatic_identification_system) data from maritime receivers over TCP or UDP. It decodes AIVDM/AIVDO NMEA sentences and creates vessel entities in the Hydris world, including position, course, speed, vessel identity, and destination.
+
+## Setup
+
+1. Open the command menu with `Ctrl+K` (or `⌘+K`) and select **Configuration**
+2. Find **NMEA** under **Feeds** in the sidebar
+3. Select a connection mode and click **Create**:
+   - **NMEA TCP Client** — connect out to a remote NMEA source (AIS feeds, GPS aggregators, marine traffic)
+   - **NMEA TCP Server** — listen for inbound TCP connections that send NMEA sentences
+   - **NMEA UDP Server** — listen for inbound UDP packets (default port 10110)
+4. Enter the **Address** and click **Apply Configuration**
+
+For the TCP client, the address should point to a source streaming NMEA sentences — for example an AIS receiver, RTL-SDR decoder like `rtl_ais`, or an AIS aggregation service. Multiple sources can be given comma-separated.
+
+Once applied, the device shows an **Active** badge and vessels begin appearing on the map as sentences arrive. New to adding sources? Start with [Connect Your Systems](/docs/operator/data-sources).
+
+## Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Address | *required* | TCP client: remote sources, comma-separated (`host:port`). TCP/UDP server: listen address (default `:10110`) |
+| Entity Expiry | `300` | Seconds without update before a track expires |
+| Latitude | | Center latitude for geo filter |
+| Longitude | | Center longitude for geo filter |
+| Radius (km) | | Only vessels within this radius are ingested |
+| Standalone | `none` | Emit the receiver itself as a standalone vehicle: `vehicle_sea`, `vehicle_land`, `vehicle_air`, `equipment_sensor`, or `person` |
+| Position Source | `best` | NMEA sentence used for self position (`best` = GGA > RMC > AIS; `desperate` also accepts void RMC) |
+| Heading Source | `best` | NMEA sentence used for self heading (`best` = HDT > OSD > AIS) |
+| Velocity Source | `best` | NMEA sentence used for self speed/course (`best` = VTG > OSD > RMC > AIS) |
+| Own MMSI | | Treat this MMSI from AIS as own ship position |
+
+### Ownship Position
+
+On ships, when the AIS transponder and GNSS receiver share the same NMEA bus, the stream contains both AIS sentences (AIVDM/AIVDO) and GNSS position fixes interleaved. When the integration sees position sentences in the stream, it creates an ownship entity so your vessel appears on the map alongside the AIS traffic.
+
+The **Self Position** settings control which sentences feed the ownship entity: choose per-quantity sources for position, heading, and velocity, use **Standalone** to emit the receiver as its own vehicle entity, and use **Own MMSI** to treat a specific AIS MMSI as your own ship. The `desperate` position source additionally accepts void (no-lock) RMC fixes.
+
+## Data Flow
+
+Inbound only. Automatically reconnects on disconnect with a few seconds of backoff.
+
+## Entity Mapping
+
+Vessel entities are created with the ID format `mmsi:{mmsi}` (e.g. `mmsi:211234567`).
+
+| AIS Field | Hydris Component |
+|-----------|-----------------|
+| Position (lat/lon) | `geo` (with accuracy-based covariance: DGPS ±5m, autonomous ±50m) |
+| Speed + Course Over Ground | `kinematics` (knots → m/s, ENU velocity) |
+| True Heading | `orientation` (quaternion) |
+| Nav Status | `navigation` (underway / stationary / moored / etc.) |
+| MMSI, Callsign, IMO, Name | `transponder.ais` |
+| Vessel Name or Callsign | `label` |
+| Destination, ETA | `mission` |
+
+### Message Types
+
+| AIS Type | Description |
+|----------|-------------|
+| 1, 2, 3 | Position report (Class A) |
+| 5 | Ship static and voyage data (name, IMO, destination, ETA) |
+| 18 | Position report (Class B) |
+| 19 | Extended position report (Class B) |
+
+
+## Geo Filtering
+
+When `latitude`, `longitude`, and `radius_km` are set, only vessels within the specified radius are ingested. This is useful for reducing noise from global AIS feeds.

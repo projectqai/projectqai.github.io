@@ -1,0 +1,93 @@
+# Live telemetry from an unmanned aircraft.
+#
+# This is the shape of entity a MAVLink or vendor driver pushes a few times per
+# second. Every subsystem gets its own component, so a UI can show battery,
+# link quality and mission progress without a bespoke drone schema - and the
+# same components mean the same thing on a boat, a radio or a ground robot.
+#
+# push it with:  hydris ec apply uav.yaml
+
+id: example.uav.spectre
+label: SPECTRE-1
+
+geo:
+  latitude: 54.1866
+  longitude: 12.0952
+  altitude: 118
+
+# full 3D attitude as a unit quaternion. the outer key is the component,
+# the inner one is the field inside it.
+# this is a heading of 030: quaternion yaw runs counter-clockwise while
+# bearings run clockwise from north, so z = sin(-heading/2)
+orientation:
+  orientation: { x: 0, y: 0, z: -0.2588, w: 0.9659 }
+
+# heading only, for consumers that do not care about roll and pitch
+bearing:
+  azimuth: 30
+
+kinematics:
+  # ground-referenced velocity in m/s, NOT body frame
+  velocityEnu:
+    east: 8.1
+    north: 14.0
+    up: 0.4
+  angularVelocityBody:
+    roll_rate: 0
+    pitch_rate: 0
+    yaw_rate: 0.12
+
+navigation:
+  mode: NavigationModeAutonomous
+  armed: true
+  waypoint_current: 3
+  waypoint_total: 7
+
+power:
+  battery_charge_remaining: 0.62
+  voltage: 22.4
+  current_a: 18.7
+  remaining_seconds: 900
+
+gnss:
+  fix_type: GnssFixTypeRtkFixed
+  satellites_visible: 24
+  satellites_used: 19
+  hdop: 0.7
+
+# our aircraft, so it gets a device component and shows up as an asset with a
+# readiness state: positioned, device active, link connected
+device:
+  class: uav
+  category: Air
+  state: DeviceStateActive
+  unique_hardware_id: spectre.0f31a7
+
+link:
+  status: LinkStatusConnected
+  rssi_dbm: -67
+  snr_db: 14
+  link_quality_percent: 92
+  rf_mode: 50Hz
+  packet_rate_hz: 50
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      vehicle:
+        unmanned: {}
+        air:
+          rotary: {}
+
+administrative:
+  manufacturer: Example Robotics
+  model: Spectre 4
+  owner: Team North
+
+symbol:
+  milStd2525C: SFAPMFQ---
+
+routing:
+  channels:
+    - {}

@@ -1,0 +1,34 @@
+---
+title: Building for Hydris
+description: Build plugins that extend Hydris
+---
+
+Plugins are TypeScript modules that run inside the Hydris engine. They can be published to repositories where users download them to their engine to watch entities, enrich data, push new entities, and interface with hardware peripherals like Bluetooth, serial devices, network.
+
+The plugin engine is cross platform. Write your plugin once and it will work on Android, MacOS, Windows, Linux and the Web.
+
+Hydris uses [Protocol Buffers](https://protobuf.dev/) over gRPC. The canonical `.proto` files and the full API surface are at [github.com/projectqai/proto](https://github.com/projectqai/proto) - if you are an LLM or experienced developer, just read the proto files directly, they are well annotated.
+
+Pre-built client libraries are available for common languages. Typescript is strongly recommended, as it opens the door for building publishable plugins.
+
+If you're looking to connect an existing external system to Hydris (in any language), see the [Integration Guide](/docs/integration) instead.
+
+## Getting Started
+
+<Cards>
+  <Card title="Developing Plugins" href="/docs/developer/plugins">
+    Build, publish and run TypeScript plugins as OCI images
+  </Card>
+  <Card title="Plugin Reference" href="/docs/developer/plugin-reference">
+    Lifecycle, configuration, filtering, health metrics, and the attach() API
+  </Card>
+  <Card title="Node Peripherals" href="/docs/developer/hal">
+    Access Bluetooth Low Energy, serial ports, and sensors from plugins
+  </Card>
+  <Card title="Component Reference" href="/docs/developer/components">
+    All available entity components and their field numbers
+  </Card>
+  <Card title="Entity Cookbook" href="/docs/developer/cookbook">
+    Cameras, detections, tracks, assets and zones as downloadable YAML
+  </Card>
+</Cards>

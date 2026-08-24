@@ -1,0 +1,249 @@
+# A PTZ camera, and everything it produces.
+#
+# This file builds a working camera on any Hydris node, because it uses the
+# simulated camera that ships with the engine. Push it, open the map, and the
+# camera renders a live view of the world around it.
+#
+# Six entities:
+#   example.mast.north          the structure. it holds the only position
+#   example.cam.north           the camera, 16 m up the mast
+#   example.cam.north~fp        the point the camera looks at
+#   example.det.person1         what the camera saw
+#   example.artifact.snapshot1  the image that proves it
+#   example.task.lookat         the action an operator can run on the camera
+#
+# Only the mast has a latitude and a longitude. The children give an offset
+# from their parent. The engine walks the tree and calculates the absolute
+# position of each child. Move the mast, and all of it moves.
+#
+# push it with:  hydris ec apply camera.yaml
+
+---
+# The structure. A mast is not a device. It cannot fail, so it has no device
+# component, and it stays a fixture on the map.
+id: example.mast.north
+label: North Mast
+
+geo:
+  latitude: 54.1801
+  longitude: 12.0871
+  altitude: 6
+
+bounds:
+  width_m: 1.2
+  height_m: 18
+  depth_m: 1.2
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      infrastructure:
+        tower: {}
+
+symbol:
+  milStd2525C: SFGPU-----
+
+routing:
+  channels:
+    - {}
+
+---
+# The camera. 16 m straight up the mast.
+#
+# This is the whole camera. There is no camera component here, no stream URL,
+# no field of view and no symbol, because a driver owns those.
+#
+# `device.parent` names the driver, and `device.class` says what kind of thing
+# to make. `config` holds the settings that the driver asks for. The driver
+# then claims the entity and writes the rest: the camera component, the stream
+# URL, the focal point, the coverage cone, the symbol and the taxonomy. Read
+# it back with `hydris ec get example.cam.north` to see what it added.
+#
+# `simcam.service` is the simulated camera that ships with the engine, so this
+# file works with no hardware. Point `device.parent` at `reolink.service` or
+# `axis.service` instead, give it an address, and the same three components
+# drive a real camera.
+#
+# Write only what you know. The driver knows the rest.
+id: example.cam.north
+label: North Mast PTZ
+
+# east_m, north_m and up_m are meters in the parent's frame
+pose:
+  parent: example.mast.north
+  cartesian:
+    east_m: 0
+    north_m: 0
+    up_m: 16
+
+device:
+  parent: simcam.service
+  class: camera
+
+config:
+  value:
+    # widest and narrowest field of view, in degrees. the engine calculates
+    # the effective field of view between them from the zoom, so the coverage
+    # cone on the map becomes narrow as the camera zooms in
+    fov_wide: 60
+    fov_tele: 8
+    # how far the camera can see, in meters
+    range_max: 2000
+    # a simulator setting: move to a new aim point at once, rather than at the
+    # speed of a real gimbal
+    instant_slew: true
+    # set this to true and the simulated camera produces its own detections
+    enable_detections: false
+
+  # raise this number every time you change the values above. the driver
+  # echoes it back in `configurable.applied_version` once the change is live
+  version: 1
+
+---
+# Where the camera points.
+#
+# A vendor pan/tilt/zoom triple means nothing to other systems, so the aim
+# point is an entity with a position. The driver creates it, and names it in
+# `camera.focal_point`.
+#
+# The two poses have two different owners:
+#   `pose`        where the gimbal is now. the driver writes it
+#   `target_pose` where it should be. a client writes it
+#
+# The driver moves the gimbal until the two agree. So this file writes only a
+# target, and the camera turns to it. Push a new `target_pose` and it turns
+# again. To aim a camera and to move a turret become the same operation.
+#
+# The lens is 22 m above the ground, so 0.9 degrees down over 1400 m puts the
+# aim point on the ground. `range` is also the zoom: it drives the effective
+# field of view between fov_wide and fov_tele.
+id: example.cam.north~fp
+label: North Mast PTZ Aimpoint
+
+target_pose:
+  polar:
+    azimuth: 120
+    elevation: -0.9
+    range: 1400
+
+---
+# What the camera saw.
+#
+# A camera measures a direction. It cannot measure a distance, so this entity
+# has no position.
+#
+# It has no angle either. A detector reports the pixel box it found, because
+# pixels are what it has. The engine takes the field of view and the frame
+# size from the camera, adds the current pan and tilt, and calculates the
+# pose. Then it draws a line of bearing with two dotted error lines.
+#
+# So the bearing follows the camera. Slew the camera with a new `target_pose`,
+# push the same box again, and the line of bearing points somewhere else.
+#
+# A detection has no symbol. `classification.taxonomy` says what it is, and
+# the client decides how to draw it.
+id: example.det.person1
+label: Person
+
+# who made this detection. the engine sets `node`, so do not set it yourself
+controller:
+  id: example.detector.yolo
+
+# detections are urgent. this sends them before routine traffic
+priority: PriorityImmediate
+
+detection:
+  detectorEntityId: example.cam.north
+
+  # entity ids that support this detection
+  evidence:
+    - example.artifact.snapshot1
+
+  # confidence that something is there
+  confidence: 0.87
+
+  # the pixel box in the frame, and the frame it came from.
+  # the engine needs all six numbers to calculate the angle
+  image_bbox:
+    x: 1620
+    y: 880
+    width: 210
+    height: 460
+    frame_width: 3840
+    frame_height: 2160
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.87
+      person: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# The image the detector kept.
+#
+# Files are too large for an entity. Put the file in an artifact entity, and
+# refer to its id. Artifacts expire on a lifetime, and the storage backend
+# then deletes the file.
+id: example.artifact.snapshot1
+label: North Mast snapshot
+
+artifact:
+  content_type: image/jpeg
+  size_bytes: 184320
+  sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+
+  # where the bytes are. list more than one location if you have copies
+  location:
+    - url: https://artifacts.example.org/snapshots/9f86d081.jpg
+
+routing:
+  channels:
+    - {}
+
+---
+# What an operator can do with the camera.
+#
+# The driver pushes this entity to advertise the action. A client then calls
+# WorldService.RunTask, and the engine creates a TaskExecutionComponent. The
+# driver watches for that component and moves the camera.
+#
+# The task is a different entity from the camera. `assignee` names the camera.
+# One camera can offer many tasks.
+id: example.task.lookat
+label: Look At (North Mast PTZ)
+
+taskable:
+  label: Look at target
+  icon: eye
+
+  # what the task does, for a human or an LLM to read
+  effect: turns the north mast camera onto the selected target and holds it there
+
+  # a new run replaces the current run
+  mode: TaskableModeReconcile
+
+  assignee:
+    - entityId: example.cam.north
+
+  # the caller must give one entity to look at.
+  # use `position` for a point, or `waypoints` for a route
+  target:
+    entity:
+      max: 1
+
+  # what the task means. a client groups tasks from different vendors by this
+  taxonomy:
+    observe:
+      look_at: {}
+
+  # sort order in the menu. high numbers come first
+  priority: 100
+
+routing:
+  channels:
+    - {}

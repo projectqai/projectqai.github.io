@@ -1,0 +1,256 @@
+# A vessel and everything bolted to it.
+#
+# The mast in camera-tower.yaml is a pose tree that never moves. This is the
+# same idea on something that does: one hull, its outline, two fixed cameras
+# and a navigation radar, all declared as offsets in meters from the ship.
+#
+# The hull carries the only latitude and longitude in the file, and an
+# orientation. Because the children hang off it by pose, the engine rotates
+# their offsets by the ship's heading before resolving them - so the bow camera
+# stays at the bow when the ship turns, and its coverage cone swings with it.
+# A driver that receives a new position and heading pushes two components on
+# one entity, and the whole assembly follows.
+#
+# `assembly` is what ties the parts together for a UI: the hull points at its
+# outline, each part points back at the hull as its parent, so an operator can
+# select the ship and see its sensors, or select a sensor and know whose it is.
+#
+# push it with:  hydris ec apply ship.yaml
+
+---
+# The platform itself.
+id: example.ship.gannet
+label: MV GANNET
+
+geo:
+  latitude: 54.2050
+  longitude: 12.0980
+  altitude: 0
+
+# heading 030, as a quaternion about the up axis. bearings are clockwise from
+# north while quaternion yaw is counter-clockwise, so the z term is negative:
+# z = sin(-heading/2), w = cos(-heading/2).
+# everything below is positioned relative to this
+orientation:
+  orientation: { x: 0, y: 0, z: -0.2588, w: 0.9659 }
+
+kinematics:
+  velocityEnu:
+    east: 1.5
+    north: 2.6
+
+# overall extent, used for scale and collision-ish reasoning
+bounds:
+  width_m: 32
+  height_m: 200
+  depth_m: 12
+
+# our platform, so it is an asset with a state. the sensors below name it as
+# their device parent, which puts the whole vessel in the device tree
+device:
+  class: vessel
+  category: Sea
+  state: DeviceStateActive
+
+# the parts of this assembly that draw its outline
+assembly:
+  outline:
+    - example.ship.gannet.hull
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      vehicle:
+        sea: {}
+
+symbol:
+  milStd2525C: SFSPXM----
+
+routing:
+  channels:
+    - {}
+
+---
+# The hull outline, drawn in the ship's own frame: north is forward, east is
+# starboard, in meters. A 200 m vessel with a pointed bow at +100.
+# The engine converts this to WGS84 and re-converts it whenever the ship moves.
+id: example.ship.gannet.hull
+
+local_shape:
+  relative_to: example.ship.gannet
+  geometry:
+    polygon:
+      outer:
+        points:
+          - { east_m: 0, north_m: 100 }
+          - { east_m: 12, north_m: 85 }
+          - { east_m: 16, north_m: 50 }
+          - { east_m: 16, north_m: -70 }
+          - { east_m: 14, north_m: -95 }
+          - { east_m: -14, north_m: -95 }
+          - { east_m: -16, north_m: -70 }
+          - { east_m: -16, north_m: 50 }
+          - { east_m: -12, north_m: 85 }
+          - { east_m: 0, north_m: 100 }
+
+routing:
+  channels:
+    - {}
+
+---
+# Forward-looking camera, 90 m ahead of the ship's origin and 15 m up.
+# Fixed, not PTZ: no focal point, so its coverage cone points wherever the
+# hull is pointing.
+id: example.ship.gannet.cam.bow
+label: Bow Camera
+
+assembly:
+  parent: example.ship.gannet
+
+# `assembly.parent` is the physical grouping for an operator, `device.parent`
+# is the tree the engine and the configuration UI walk. Here they agree,
+# but they answer different questions and often do not.
+device:
+  parent: example.ship.gannet
+  class: camera
+  state: DeviceStateActive
+
+pose:
+  parent: example.ship.gannet
+  cartesian:
+    east_m: 0
+    north_m: 90
+    up_m: 15
+
+camera:
+  fov: 60
+  range_max: 5000
+  streams:
+    - label: Bow
+      url: rtsp://gannet.example.org/bow
+      protocol: MediaStreamProtocolRtsp
+      role: MediaStreamRoleMain
+      codec: H264
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          electro_optical: {}
+
+symbol:
+  milStd2525C: SFGPE-----
+
+routing:
+  channels:
+    - {}
+
+---
+# Aft-facing camera, wider and shorter ranged.
+id: example.ship.gannet.cam.stern
+label: Stern Camera
+
+assembly:
+  parent: example.ship.gannet
+
+device:
+  parent: example.ship.gannet
+  class: camera
+  state: DeviceStateActive
+
+pose:
+  parent: example.ship.gannet
+  cartesian:
+    east_m: 0
+    north_m: -85
+    up_m: 10
+
+camera:
+  fov: 90
+  range_max: 3000
+  streams:
+    - label: Stern
+      url: rtsp://gannet.example.org/stern
+      protocol: MediaStreamProtocolRtsp
+      role: MediaStreamRoleMain
+      codec: H264
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          electro_optical: {}
+
+symbol:
+  milStd2525C: SFGPE-----
+
+routing:
+  channels:
+    - {}
+
+---
+# Navigation radar on the mast, 25 m above the waterline.
+# Unlike a camera, its coverage is not derived from a field of view - it points
+# at shape entities that describe it, which is how any sensor with a coverage
+# footprint the engine cannot guess declares one.
+id: example.ship.gannet.radar
+label: Navigation Radar
+
+assembly:
+  parent: example.ship.gannet
+
+device:
+  parent: example.ship.gannet
+  class: radar
+  state: DeviceStateActive
+
+pose:
+  parent: example.ship.gannet
+  cartesian:
+    east_m: 0
+    north_m: 0
+    up_m: 25
+
+sensor:
+  coverage:
+    - example.ship.gannet.radar.coverage
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          radar: {}
+
+symbol:
+  milStd2525C: SFGPESR---
+
+routing:
+  channels:
+    - {}
+
+---
+# 20 km all-round radar coverage, again in the ship's frame so it travels
+# with the hull.
+id: example.ship.gannet.radar.coverage
+
+local_shape:
+  relative_to: example.ship.gannet
+  geometry:
+    circle:
+      center: { east_m: 0, north_m: 0 }
+      radius_m: 20000
+  extrusion:
+    fill:
+      color: "#38bdf8"
+      opacity: 0.06
+
+routing:
+  channels:
+    - {}

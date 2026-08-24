@@ -1,0 +1,378 @@
+---
+title: CEL Policies
+description: How authentication and authorization work with CEL policy chains
+---
+
+## Overview
+
+Every request to a hydris node passes through two policy chains, both written as
+[CEL](https://cel.dev/) rules inside ordinary entities:
+
+1. **`authn.policy`** — *authentication*: resolves **who** a connection is. Each rule maps
+   the connection (source address, mTLS certificate, locality) to an **actor** — an entity ID
+   like `admin.actor` or `auth:anonymous`.
+2. **`authz.policy`** — *authorization*: decides **what** the actor may do. Rules are
+   evaluated against the request (operation flags, source, actor, the entity being changed)
+   and produce an Allow or Deny verdict.
+
+Both chains live in the [`PolicyComponent`](/docs/developer/components#policycomponent) of
+their singleton entities, shipped in the engine defaults and editable at runtime: push a new
+`PolicyComponent` to `authz.policy` or `authn.policy` and the engine recompiles the chains
+immediately.
+
+### Reserved entities
+
+| Entity ID | Purpose |
+|---|---|
+| `authn.policy` | Chain that resolves a connection to an actor identity |
+| `authz.policy` | Global authorization chain |
+| `admin.actor` | Identity assigned to trusted connections; ships with an allow-all entity policy |
+| `auth:anonymous` | Identity assigned when no rule maps the connection to anything else |
+
+## Authentication — `authn.policy`
+
+The authn chain answers "who is this connection?". It is evaluated **once per connection**
+and the result is cached for the connection's lifetime.
+
+Unlike authorization rules, authn rules don't produce verdicts — each rule's CEL expression
+returns a **string**:
+
+- The **first non-empty string** wins and becomes the actor entity ID.
+- An empty string means "not this rule", and evaluation continues.
+- If **no rule** returns a non-empty string, the **connection is denied**.
+- Rules without a CEL expression are skipped (the `action` field is ignored in this chain).
+
+The shipped default chain:
+
+```yaml
+id: authn.policy
+policy:
+  rules:
+    - cel: 'source.mtls.verified.self ? "admin.actor" : ""'
+      label: presenting this node's TLS cert authenticates as admin
+    - cel: '(is.local || is.builtin) ? "admin.actor" : ""'
+      label: trusted connections are admin.actor
+    - cel: '"auth:anonymous"'
+      label: everyone else is anonymous
+```
+
+Loopback and in-process connections become `admin.actor`, as does any peer that proves
+possession of this node's own TLS keypair. Everyone else falls through to `auth:anonymous`.
+
+If the `authn.policy` entity is missing entirely, the engine falls back to the equivalent
+built-in behavior (local / builtin / own-cert → `admin.actor`, else `auth:anonymous`) so a
+node is never left unreachable.
+
+### mTLS identity
+
+When a client presents a TLS certificate, the engine validates the chain against the node's
+own certificate as the trust root **before** the authn chain runs:
+
+- A certificate that **fails validation denies the connection outright** — it never reaches
+  the policy.
+- A validated certificate populates `source.mtls.verified`.
+- No certificate leaves the fields empty.
+
+| Field | Type | Description |
+|---|---|---|
+| `source.mtls.verified.cn` | string | Leaf certificate subject CommonName |
+| `source.mtls.verified.fingerprint` | string | Leaf certificate SHA-256, colon-separated hex (`"a1:b2:..."`) |
+| `source.mtls.verified.ca` | string | Issuing CA CommonName |
+| `source.mtls.verified.self` | bool | The leaf **is** this node's own certificate (admin bootstrap) |
+
+For certificates the node signed, `cn != ca`; the node's own certificate has `cn == ca` and
+`self == true`.
+
+Map a known peer certificate to its own identity entity by inserting a rule before the
+anonymous fallback:
+
+```yaml
+- cel: 'source.mtls.verified.fingerprint == "a1:b2:c3:..." ? "auth:cert:field-tablet" : ""'
+  label: field tablet
+```
+
+The returned ID is just an entity ID — create that entity and attach a `PolicyComponent` to
+it to define what the identity may do (see [Defer](#defer-entity-level-policies) below).
+
+### Variables available in authn rules
+
+| Variable | Description |
+|---|---|
+| `source.address` | IP address of the connecting peer |
+| `source.port` | Port of the connecting peer |
+| `source.mtls.verified.*` | Validated certificate identity (see above) |
+| `is.local` | Connection originates from localhost |
+| `is.builtin` | In-process builtin caller |
+
+## Authorization — `authz.policy`
+
+Once the actor is resolved, every request is checked against the global authorization chain.
+Rules are evaluated **top to bottom**; each has an **action** and an optional CEL
+**condition** (a missing condition matches unconditionally).
+
+| Action | Effect |
+|---|---|
+| `Allow` | Accept the request. Evaluation stops. |
+| `Deny` | Reject the request. Evaluation stops. |
+| `Log` | Record the match for auditing, then continue with the next rule. |
+| `Defer` | Jump to another entity's policy chain. See [Defer](#defer-entity-level-policies). |
+
+If the chain ends without a verdict, the request is **allowed** — use an unconditional
+`Deny` at the end for a fail-closed policy.
+
+The shipped default chain delegates everything to the actor's own policy:
+
+```yaml
+id: authz.policy
+policy:
+  rules:
+    - action: PolicyActionDefer
+      cel: 'actor.id'
+      label: defer to the actor's policy
+    - action: PolicyActionAllow
+      label: insecure by default for backwards-compat for now
+```
+
+`admin.actor` carries an allow-all entity policy, so trusted connections may do anything.
+`auth:anonymous` ships with **no** policy, so the Defer produces no verdict and falls
+through to the trailing Allow. To lock a node down, attach rules to `auth:anonymous` (e.g.
+read-only) and change the tail rule to `PolicyActionDeny`.
+
+If the `authz.policy` entity carries no `PolicyComponent` at all (e.g. defaults disabled or
+the entity was wiped), the engine falls back to a fail-closed chain: local and builtin
+callers are allowed so an operator can restore a policy, everything else is denied.
+
+### Pushes are checked per entity
+
+An `EntityChangeRequest` may carry many changes; the chain runs **once per changed entity**,
+with `change` bound to that entity and `is.create` / `is.update` / `is.replace` reflecting
+whether the ID already exists. A single denied entity rejects the request.
+
+## CEL reference
+
+Conditions are CEL expressions evaluated against the request context.
+
+### `actor` — the authenticated identity
+
+| Field | Type | Description |
+|---|---|---|
+| `actor.id` | string | Entity ID resolved by `authn.policy` (e.g. `admin.actor`, `auth:anonymous`) |
+
+### `is` — operation and scope flags
+
+| Flag | Meaning |
+|---|---|
+| `is.local` | Connection originates from localhost |
+| `is.builtin` | In-process builtin caller |
+| `is.federation` | Request relayed by the federation builtin for a remote node |
+| `is.http` | Request arrived over HTTP |
+| `is.grpc` | Request arrived over gRPC |
+| `is.read` | Read operation |
+| `is.write` | Write operation |
+| `is.get` | GetEntity / GetLocalNode |
+| `is.list` | ListEntities |
+| `is.watch` | WatchEntities |
+| `is.push` | Entity change push |
+| `is.create` | Pushing a new entity (ID not yet in the world) |
+| `is.update` | Pushing changes to an existing entity |
+| `is.replace` | Entity replacement |
+| `is.expire` | ExpireEntity |
+| `is.task` | RunTask |
+| `is.reset` | HardReset / LoadMission |
+| `is.upload` | Artifact upload |
+
+### `source` — peer information
+
+| Field | Type | Description |
+|---|---|---|
+| `source.address` | string | IP address of the connecting peer |
+| `source.port` | string | Port of the connecting peer |
+| `source.builtin` | string | Name of the in-process builtin (e.g. `"federation"`), empty for external connections |
+| `source.node` | string | Remote node ID when the federation builtin relays a request, empty otherwise |
+
+### `change` — the entity being modified
+
+Bound on write operations (and on artifact transfers, where only `change.id` is set). A full
+`world.Entity` protobuf — use `has()` to check for the presence of components:
+
+```
+has(change.camera)
+has(change.policy)
+change.controller.node == "some-node-id"
+```
+
+### `method` and `path`
+
+Set for plain HTTP requests only (empty for gRPC):
+
+```
+is.http && method == "GET" && path == "/media/snapshot"
+```
+
+### Custom functions
+
+**`head(entityID)`** looks up an entity in the current world state. Returns an empty entity
+if not found.
+
+```
+head("sensor.1").controller.node == "abc"
+```
+
+**`string.inCIDR(cidr)`** checks whether an IP address string falls within a CIDR range.
+
+```
+source.address.inCIDR("192.168.1.0/24")
+```
+
+## Defer — entity-level policies
+
+A `Defer` rule jumps into another entity's policy chain. Its CEL expression returns the
+**target entity ID** (a string, not a bool):
+
+```yaml
+- action: PolicyActionDefer
+  cel: 'actor.id'          # jump to the actor's own policy
+- action: PolicyActionDefer
+  cel: 'change.id'         # jump to the policy of the entity being written
+```
+
+Defer semantics:
+
+- An **empty string** result skips the rule and evaluation continues.
+- If the target entity's chain produces a verdict, that verdict is final.
+- If the target entity **exists** but has no policy — or its chain produces no verdict —
+  evaluation **returns to the calling chain** and continues with the next rule.
+- A target ID that names **no entity**, a non-string result, or an evaluation error
+  **fails closed** (Deny).
+- Defer can nest up to 5 levels deep; beyond that it fails closed.
+
+This is the backbone of the default setup: `authz.policy` defers to `actor.id`, so what a
+connection may do is defined entirely by the policy attached to its identity entity.
+
+```typescript
+// Grant an identity read-only access plus writes to its own subtree
+await client.push({
+  changes: [{
+    id: 'auth:cert:field-tablet',
+    label: 'Field Tablet',
+    policy: {
+      rules: [
+        { action: PolicyAction.PolicyActionAllow, cel: 'is.read' },
+        { action: PolicyAction.PolicyActionAllow, cel: 'is.write && change.id.startsWith("tablet-1.")' },
+        { action: PolicyAction.PolicyActionDeny },
+      ],
+    },
+  }],
+});
+```
+
+## Evaluation details
+
+**Errors fail toward safety.** A rule whose CEL fails to compile is dropped from the chain
+(logged at startup/rebuild). A rule whose CEL errors at evaluation time is skipped — unless
+its action is `Deny`, in which case it matches (fail closed).
+
+**Rebuild triggers.** The global chains are recompiled whenever `authz.policy` or
+`authn.policy` change. Entity-level policies reached via Defer are compiled at evaluation
+time, so changes to them apply immediately.
+
+**HTTP endpoints.** Non-RPC HTTP routes (media, artifacts, plugins) go through the same
+chain with `is.http`, `method`, and `path` set; `GET`/`HEAD`/`OPTIONS` count as reads,
+everything else as writes. Artifact routes (`/artifacts/{id}`) bind `change.id` to the
+target entity so entity-scoped gates and Defer work. WebRTC stream negotiation (`/media/whep/`)
+uses POST but only consumes a stream, so it is gated as a read.
+
+**Media streams.** RTSP carries no per-request credentials, so camera stream access is
+evaluated as an **anonymous read** of a `/media/` path. Localhost remains allowed through
+`is.local`.
+
+**Artifact streams.** Streaming uploads and downloads are authorized on the first message —
+before any blob bytes are stored or served — with `change.id` set to the target entity and
+`is.upload` set for uploads.
+
+**Builtins.** In-process builtins are trusted: they may declare the builtin name and
+federation node they relay for (surfaced as `source.builtin` / `source.node` and
+`is.builtin` / `is.federation`), and may act as a declared identity. These declarations only
+work on the in-process connection — a remote peer can never set them.
+
+## Examples
+
+### Read-only anonymous access, admin for everyone you signed
+
+Keep the default `authn.policy`, then attach a policy to `auth:anonymous` and close the
+tail of `authz.policy`:
+
+```yaml
+id: authz.policy
+policy:
+  rules:
+    - action: PolicyActionDefer
+      cel: 'actor.id'
+    - action: PolicyActionDeny
+      label: fail closed
+---
+id: auth:anonymous
+policy:
+  rules:
+    - action: PolicyActionAllow
+      cel: 'is.read'
+    - action: PolicyActionDeny
+```
+
+### Restrict an identity to a subnet
+
+```yaml
+id: auth:cert:gateway
+policy:
+  rules:
+    - action: PolicyActionDeny
+      cel: '!source.address.inCIDR("10.0.0.0/8")'
+    - action: PolicyActionAllow
+```
+
+### Audit remote writes
+
+`Log` records the match and continues, so it can sit in front of the normal rules:
+
+```yaml
+id: authz.policy
+policy:
+  rules:
+    - action: PolicyActionLog
+      cel: 'is.write && !is.local'
+      label: audit remote writes
+    - action: PolicyActionDefer
+      cel: 'actor.id'
+    - action: PolicyActionDeny
+```
+
+### Protect a specific entity
+
+Defer to the entity being written, and let the entity decide:
+
+```yaml
+id: authz.policy
+policy:
+  rules:
+    - action: PolicyActionAllow
+      cel: 'is.read || is.local'
+    - action: PolicyActionDefer
+      cel: 'change.id'
+    - action: PolicyActionDeny
+---
+id: camera.1
+policy:
+  rules:
+    - action: PolicyActionAllow
+      cel: 'source.address.inCIDR("10.0.0.0/8")'
+    - action: PolicyActionDeny
+```
+
+Remote reads are allowed globally. Writes to `camera.1` are only accepted from
+`10.0.0.0/8`. Writes to entities without their own policy fall back through the Defer to the
+final Deny.
+
+## Next Steps
+
+- [PolicyComponent reference](/docs/developer/components#policycomponent) - Component fields
+- [Routing & Federation](/docs/developer/routing) - How entities are distributed across nodes

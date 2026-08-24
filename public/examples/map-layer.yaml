@@ -1,0 +1,32 @@
+---
+# An XYZ tile source, same template a slippy map uses.
+id: example.layer.seachart
+label: Sea Chart
+
+map_layer:
+  z_index: 10
+  opacity: 0.8
+  tiles:
+    url: https://tiles.example.org/seachart/{z}/{x}/{y}.png
+
+---
+# A single bitmap, centered on the entity's geo and sized in meters.
+# Move the entity and the image moves with it.
+id: example.layer.siteplan
+label: Site Plan
+
+geo:
+  latitude: 54.1788
+  longitude: 12.0895
+
+map_layer:
+  z_index: 20
+  opacity: 0.6
+  image:
+    url: https://artifacts.example.org/siteplan.png
+    width_m: 600
+    height_m: 400
+
+routing:
+  channels:
+    - {}

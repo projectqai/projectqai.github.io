@@ -1,0 +1,296 @@
+---
+title: Entity Cookbook
+description: Examples of common entity shapes, as YAML files you can download and push
+---
+
+
+The hydris data model is extremly flexible, covering all domains and maps to many down and upstream standards. The flexibility can be overwhelming, so here's a few very concrete examples of how the system is intended to be used. Note that while these are showing screenshots, the end goal of an integration is never to just show things in the hydris UI. Maximize the use of builtin transformers instead of drawing things directly, so hydris can translate your original _intent_ the way a downstream system understands it.
+
+Every example is a valid input to `hydris ec apply`, which takes a file of one or more entities and pushes them:
+
+```bash
+# from a file
+hydris ec apply camera.yaml
+
+# straight off this site
+curl -sL https://projectqai.github.io/examples/camera.yaml | hydris ec apply -
+```
+
+
+
+## Static picture
+
+### A point on the map
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-marker.png" alt="A single labelled marker on the map, drawn from a geo and a symbol" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+The smallest useful entity. `geo` gives the position and `symbol` draws it. `routing` lets it leave the node. An entity without `routing` stays local, which is how device and configuration entities avoid your whole network.
+
+<ExampleFile file="marker.yaml" />
+
+<include lang="yaml">../../../public/examples/marker.yaml</include>
+
+### Zones and volumes
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-zones.png" alt="A dashed circular zone and a rectangular outline drawn on the map as shape entities" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+An outline is a `shape` entity. It holds no `geo` of its own, because the geometry holds the coordinates. Add an `extrusion`, and the flat outline becomes a volume. Use this for a no-fly cylinder or a building.
+
+<ExampleFile file="zones.yaml" />
+
+<include lang="yaml">../../../public/examples/zones.yaml</include>
+
+### Map overlays
+
+A tile source or a georeferenced image. The operator can switch each layer on and off.
+
+<ExampleFile file="map-layer.yaml" />
+
+<include lang="yaml">../../../public/examples/map-layer.yaml</include>
+
+## Sensors
+
+### What makes a sensor an asset
+
+Each sensor below has a `device` component. A `geo` and a `symbol` draw a picture of a thing. A `device` says that the thing is equipment you own, and that it can be active, degraded or dead:
+
+```yaml
+device:
+  class: radar                              # what kind of thing it is
+  category: Sea                             # how a UI groups it
+  state: DeviceStateActive                  # Pending, Active, Degraded, Failed
+  error: sensor buried, calibration overdue # for a human, when the state is not Active
+  unique_hardware_id: example.radar.sn-4417 # follows the hardware between ports and nodes
+  parent: example.ship.gannet               # its place in the device tree
+```
+
+An entity with **both** a `device.state` and a `symbol` is an asset. That puts it in the readiness panel, and controls whether an operator can task it. Readiness uses three components: `geo` for position, `device.state` for the device, and `link.status` for comms. See [Task Assets](/docs/operator/tasking-assets).
+
+A sensor without a `device` is only a marker. It can never report that it is broken.
+
+
+For real hardware, the engine finds the device and writes these entities for you, with the `usb`, `ip`, `serial`, `ble` etc details filled in. You write one by hand when you are the driver. To make a device configurable, add a `ConfigurableComponent` with a JSON schema. The user's answer comes back as a `ConfigurationComponent` on the same entity. See the [Plugin Reference](/docs/developer/plugin-reference).
+
+### Detections
+
+A detection is one raw observation from one sensor. It is not a track. It is not fused.
+Some sensors have built in trackers, but most don't.
+
+A detection usually does not know where it is. A sensor measures an offset from itself, and different sensors measure different amounts. So the detection reports what the sensor measured, and the engine resolves it against the pose of the sensor:
+
+| The sensor measured | What you push | What you get back |
+| --- | --- | --- |
+| a direction | `pose.polar` with `azimuth` and no `range` | a `bearing`, no position, and a line of bearing with dotted error lines |
+| a direction and a distance | the same, with `range` | a `geo`, and a line of bearing that runs to range + 2σ |
+| an offset in meters | `pose.cartesian` with `east_m` and `north_m` | a `geo` and an uncertainty ellipse. A cartesian offset holds no direction |
+| a position | `geo` with a `covariance` and no pose | the ellipse. An isotropic covariance becomes a circle |
+| that something is near | `pose.cartesian` with a covariance and no offset | the detection on its sensor, inside a circle of uncertainty |
+
+Give the uncertainty once, in the form your sensor produces. Use the `azimuth_error_deg` fields or the covariance matrix. The engine calculates the other form.
+
+**A detection typically has no `symbol`.** Put what the sensor observed in `classification.taxonomy`, which is a tree that a machine can read. The client that draws the picture then decides how to draw it. A 2525C code is a decision about drawing, and the detector must not make it.
+
+You lose nothing, because the engine calculates a symbol from the taxonomy:
+
+| Taxonomy | Also on the entity | Symbol you get |
+| --- | --- | --- |
+| `equipment.sensor.radar` | a `device` component | `SFGPESR---`. **F** for friend, because your own equipment carries a device |
+| `equipment.sensor.radar` | nothing | `SUGPESR---`. **U** for unknown |
+| `person` with `confidence.pending` | nothing | `SPGPU-----`. **P** for pending |
+| none | — | no symbol, which is correct for a bare radar return |
+
+
+### Cameras
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-camera-aimpoint.png" alt="A mast camera with its coverage cone pointing at a separate aim point entity, and the live stream below showing the detection box behind it" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+A camera measures a direction, and no distance. The example file holds a mast, the camera, the point it looks at, 
+
+The aim point is implemented by the camera driver. A vendor pan/tilt/zoom triple means nothing to other systems, so the aim point is an entity with a position. The driver reports the true direction in `pose`. A client writes the wanted direction into `target_pose`. The driver then moves the gimbal until the two agree. To aim a camera and to move a turret become the same operation.
+
+The example also contains a detection as a bounding box. The builtin transformers automatically calculate a LOB from that.
+
+<ExampleFile file="camera.yaml" />
+
+<include lang="yaml">../../../public/examples/camera.yaml</include>
+
+### Radars
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-radar.png" alt="Radar coverage circle with two plots, one drawn as a line of bearing with error lines and one as an uncertainty ellipse, and the track fused from them" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+Radars differ in what they give you, and the difference decides what your driver pushes.
+
+A simple radar reports plots: raw returns with a bearing and a range, and no memory from one sweep to the next. Those are detections. Drivers report a plot in three different ways, and the file shows all three.
+
+Many radars associate their own plots and report tracks. Some report both. A radar that reports tracks needs no detections at all: push the track, and name the radar in `track.tracker`. A consumer cannot tell whether radar firmware or a separate fuser produced a track, and it does not need to.
+
+A track keeps `evidence` pointers to the plots it used, when it has them, so an operator can ask why the contact exists. Its history and its predicted path are separate `shape` entities, so a client that needs only the current position does not receive them.
+
+The radar also declares what it can see. A camera gives a `fov` and a `range_max`, and the engine builds the cone. No two radars have the same footprint, so `sensor.coverage` names shape entities instead. It is a list, which lets a radar with a mast in the way declare one shape for each part it can see.
+
+<ExampleFile file="radar.yaml" />
+
+<include lang="yaml">../../../public/examples/radar.yaml</include>
+
+### Perimeter Sensors
+
+Something like a simple acoustic ground sensor cannot measure a direction or a distance. It knows only that something is near. Give the detection a zero offset and a large covariance. Use the same shape for a tripwire, a door contact or a chemical alarm.
+
+The file also shows the two components for the data a sensor produces. `metric` holds live readings, each with a kind and a unit. `capture` holds raw bytes that nothing has decoded yet. Bytes that are too large for an entity go in an `artifact` entity, and everything else names it by id.
+
+<ExampleFile file="audio-sensor.yaml" />
+
+<include lang="yaml">../../../public/examples/audio-sensor.yaml</include>
+
+## Fusion
+
+One sensor rarely knows where a thing is. Several sensors that observe the same thing do. A fusion engine reads their detections, solves the geometry, and pushes the answer as a new entity.
+
+Fusion needs no new component. The pattern is always the same:
+
+1. Each sensor driver pushes what its own sensor measured, and nothing more. It does not know that the other sensors exist.
+2. The fusion engine reads those detections and solves for the position.
+3. The fusion engine pushes one entity, and names every detection it used in `evidence`.
+
+The `evidence` list is what makes the result auditable. An operator can ask which sensors produced a position, and a later stage can use the same detections again. Because the drivers stay separate, another sensor of the same kind changes only the fusion engine.
+
+The output of a fusion engine is a track. A detection is what one sensor measured, and a track is a located thing. If you can say where it is, it is a track.
+
+One engine behaviour follows from that. The engine draws the uncertainty shape for a detection. It draws none for a track, which carries the same information in `geo.covariance`.
+
+### Stereo vision
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-stereo-vision.png" alt="Two cameras with overlapping coverage cones, their lines of bearing crossing at the fused track" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+One camera gives a direction. Two cameras that see the same object give two directions that cross, and the crossing point is the position.
+
+The detectors here push no angle at all. Each one reports the pixel box it found, because pixels are what a detector has. The engine takes the field of view and the frame size from the camera, and calculates the bearing with a pinhole model. The fusion engine then crosses the two bearings.
+
+The covariance on the result is the geometry of the measurement. Both cameras stand 808 m from the object and know their angle to 0.5°. That gives 5 m of error across the line of sight and 40 m along it. A short baseline always produces an ellipse that is long in the viewing direction. To reduce the depth error, move the cameras further apart.
+
+<ExampleFile file="stereo-vision.yaml" />
+
+<include lang="yaml">../../../public/examples/stereo-vision.yaml</include>
+
+### Time of arrival
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-time-of-arrival.png" alt="Three tripwire sensors with range rings that cross at the solved track position south of them" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+A tripwire cannot give a direction or a distance. It reports that a sound reached it, and when. Sound travels 343 m each second, so a difference between two arrival times is a difference in distance. Three sensors that are not in one line give two independent differences, which is enough to solve for the position and for the moment of the event.
+
+The measurement is the timestamp, so each sensor puts its arrival time in `lifetime.fresh`. That is the field for when an observation happened.
+
+The event in this file lies south of all three sensors, outside the triangle they form. Nothing in the input says that. It comes only from the order of the three arrival times, and from the gaps between them.
+
+The covariance follows from the clock. These sensors share time to about 10 ms over a radio, and 10 ms of sound is 3.4 m. That gives 4.5 m of error east and 16.9 m north. The ellipse points north because all three sensors measure the distance to the south in nearly the same direction. An event inside the triangle gives a round ellipse. Better clocks give a smaller one.
+
+<ExampleFile file="time-of-arrival.yaml" />
+
+<include lang="yaml">../../../public/examples/time-of-arrival.yaml</include>
+
+## Vehicles
+
+### Ship
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-ship.png" alt="Ship outline with bow and stern cameras and a navigation radar, each coverage area rotated with the hull" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+A hull, its outline, two fixed cameras and a navigation radar. Each part gives an offset in meters from the ship.
+
+The hull has an `orientation`. The engine rotates the offset of each child by it. The bow camera stays at the bow through a turn, and its coverage cone turns with the ship. A driver that receives a new position and heading pushes two components on one entity, and the other five entities follow.
+
+Watch the sign of the quaternion. A bearing runs clockwise from north, and quaternion yaw runs counter-clockwise. A heading of 030 is `z = sin(-15°)`, not `sin(15°)`.
+
+The two sensors declare their coverage in different ways. The cameras give a `fov` and a `range_max`, and the engine builds the cone. The engine cannot guess the shape of the radar coverage, so `sensor.coverage` names a shape entity that gives it.
+
+<ExampleFile file="ship.yaml" />
+
+<include lang="yaml">../../../public/examples/ship.yaml</include>
+
+### UAV
+
+Telemetry from an unmanned aircraft, at the rate a MAVLink driver pushes it. Each subsystem has its own component: battery, link quality, GNSS fix and mission progress. A UI shows all of it and knows nothing about aircraft. The same `power` and `link` components mean the same thing on a boat, a radio or a ground robot.
+
+<ExampleFile file="uav.yaml" />
+
+<include lang="yaml">../../../public/examples/uav.yaml</include>
+
+### A contact from AIS
+
+The two files above are vehicles you control. This one is a vehicle you only watch. Almost nothing in it is maritime. `geo`, `bearing` and `kinematics` are the components the UAV uses. Only `transponder` holds the AIS data. An aircraft from ADS-B is the same entity with `transponder.adsb`.
+
+It has no `device` component, because you do not own it.
+
+<ExampleFile file="vessel.yaml" />
+
+<include lang="yaml">../../../public/examples/vessel.yaml</include>
+
+## Team
+
+A person is an entity, and a person carries equipment. The equipment attaches to the person exactly as the ship sensors attach to the hull.
+
+Three components do three different jobs, and a UI uses all three:
+
+- `pose` gives where the device sits on the person, so it moves with them.
+- `assembly` says which person the device is part of.
+- `device.parent` puts the device under the person in the device tree.
+
+The `mission` component on the team leader names the members, the task and the destination. That is what makes two people a team.
+
+Chat is also an entity, so a message uses the same routing, priority and lifetime as everything else. A bridge can carry it to TAK, to Meshtastic or to a radio. `sender` and `to` hold entity ids, not names.
+
+<ExampleFile file="team.yaml" />
+
+<include lang="yaml">../../../public/examples/team.yaml</include>
+
+## Push entities for real
+
+The examples are complete entities. A live feed does not push that way. Two rules apply.
+
+**Push only what changed.** `Push` takes `changes` and `replacements`:
+
+- `changes` replaces each component in your message, and leaves out every component you did not send. A driver that sends `{id, geo}` at 10 Hz keeps `label`, `power` and `link` as they were.
+- `replacements` replaces the whole entity. The engine removes every component you did not send.
+
+The engine replaces a whole component. It never merges the fields inside one. If you push a `geo` with only a `latitude`, the longitude and the altitude are lost. Read [Entity Merge](/docs/developer/merge) before two controllers write to one entity.
+
+**Give short-lived things a lifetime.** No example sets `lifetime.until`, because a fixed time in a file is either in the past or far in the future. A real feed sets one:
+
+```yaml
+lifetime:
+  fresh: "2026-03-01T09:14:02Z"   # when the sensor made this observation
+  until: "2026-03-01T09:14:32Z"   # gone 30 seconds later, unless something refreshes it
+```
+
+`fresh` also rejects updates that arrive out of order. The engine drops a push when its `fresh` is older than the value the component already has. Detections and tracks need both fields. Markers, zones and vehicles usually need neither.
+
+
+## Next steps
+
+<Cards>
+  <Card title="Component Reference" href="/docs/developer/components">
+    Every component, field by field
+  </Card>
+  <Card title="Understanding Entities" href="/docs/developer/entities">
+    Why there are no types
+  </Card>
+  <Card title="Entity Merge" href="/docs/developer/merge">
+    What happens when two controllers write one entity
+  </Card>
+  <Card title="gRPC / HTTP API" href="/docs/integration/grpc">
+    The same entities from TypeScript, Python, Go and Rust
+  </Card>
+</Cards>

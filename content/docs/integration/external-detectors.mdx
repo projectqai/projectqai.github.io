@@ -1,0 +1,302 @@
+---
+title: External Detectors
+description: Push detections from an external computer-vision or sensor pipeline into Hydris
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+External detector pipelines — YOLO, custom CV models, radar classifiers, acoustic sensors — can push detections directly into the Hydris world model. Detections link back to the sensor that produced them, carry an optional bounding box and confidence score, and feed into the tracker for fusion.
+
+## Entity Model
+
+A camera detection pipeline typically produces three kinds of entities:
+
+| Entity | Components | Purpose |
+|--------|------------|---------|
+| **Camera** | `CameraComponent`, `GeoSpatialComponent`, `BearingComponent` | The sensor itself — provides the video stream and field-of-view geometry |
+| **Detection** | `DetectionComponent`, `Lifetime`, `Controller` | One per detected object per inference cycle — links back to the camera and auto-expires via `lifetime.until` |
+| **Focal Point** | `PoseComponent`, `TargetPoseComponent` | Where a PTZ camera is currently looking (optional) |
+
+The camera entity usually already exists (created by a camera driver like Reolink or a manual setup). Your detector pipeline only needs to push **detection entities**.
+
+## Detection Entity Fields
+
+Each detection entity needs:
+
+- **`id`** — A deterministic ID derived from the camera and the detection, e.g. `camera-north~det~vessel-123`. Using a stable ID means repeated pushes for the same object update the entity instead of creating duplicates.
+- **`controller.id`** — Your pipeline's identifier, so Hydris knows who owns these detections.
+- **`lifetime`** — Temporal validity of this detection. Set `from` to the timestamp of the frame that produced the detection and `until` to the point it should expire. If your detector runs slower than the source framerate (which is recommended), set `until` to cover the full inference interval — e.g. if you run inference every 2 seconds, set `until` to 2 seconds after `from`. The detection auto-expires when `until` is reached, so you don't need to manually expire detections that your pipeline keeps refreshing. See [Entity Merge & Synchronization](/docs/developer/merge) for details on how lifetimes interact with the LWW merge model.
+- **`detection.detectorEntityId`** — The camera entity ID, linking the detection back to its source sensor.
+- **`detection.confidence`** — A 0.0–1.0 score. The tracker and UI use this to filter and rank.
+- **`detection.image_bbox`** — Pixel-space bounding box including the full frame dimensions. The engine uses this together with `CameraComponent.fov` to compute a world-space bearing.
+- **`detection.evidence`** — Entity IDs of correlated objects (e.g. the tracked entity this detection corresponds to, if known).
+
+Optional but useful:
+
+- **`label`** — Human-readable name shown in the UI (e.g. a class label like "Person" or a vessel name).
+- **`priority`** — Set to `PriorityImmediate` so detections are forwarded promptly in bandwidth-constrained links.
+
+## Pushing Detections
+
+<Tabs items={['TypeScript', 'Python', 'Go']}>
+  <Tab value="TypeScript">
+    ```typescript
+    import { EntitySchema, WorldService, Priority } from "@projectqai/proto/world";
+    import { create } from "@bufbuild/protobuf";
+    import { timestampFromDate } from "@bufbuild/protobuf/wkt";
+    import { createClient } from "@connectrpc/connect";
+    import { createConnectTransport } from "@connectrpc/connect-web";
+
+    const transport = createConnectTransport({
+      baseUrl: "http://localhost:50051",
+    });
+    const client = createClient(WorldService, transport);
+
+    const CAMERA_ID = "camera-north";
+    const CONTROLLER_ID = "my-detector";
+    const INFERENCE_INTERVAL_MS = 2000; // how often your detector runs
+
+    // Push a detection for each object found in the current frame
+    async function pushDetection(detection: {
+      objectId: string;
+      label: string;
+      confidence: number;
+      bbox: { x: number; y: number; w: number; h: number };
+      frameWidth: number;
+      frameHeight: number;
+      frameTime: Date;
+    }) {
+      const validUntil = new Date(
+        detection.frameTime.getTime() + INFERENCE_INTERVAL_MS
+      );
+
+      const entity = create(EntitySchema, {
+        id: `${CAMERA_ID}~det~${detection.objectId}`,
+        label: detection.label,
+        priority: Priority.PriorityImmediate,
+        controller: { id: CONTROLLER_ID },
+        lifetime: {
+          from: timestampFromDate(detection.frameTime),
+          until: timestampFromDate(validUntil),
+        },
+        detection: {
+          detectorEntityId: CAMERA_ID,
+          evidence: [detection.objectId],
+          confidence: detection.confidence,
+          imageBbox: {
+            x: detection.bbox.x,
+            y: detection.bbox.y,
+            width: detection.bbox.w,
+            height: detection.bbox.h,
+            frameWidth: detection.frameWidth,
+            frameHeight: detection.frameHeight,
+          },
+        },
+      });
+
+      await client.push({ changes: [entity] });
+    }
+    ```
+  </Tab>
+  <Tab value="Python">
+    ```python
+    from datetime import timedelta
+    import grpc
+    from google.protobuf.timestamp_pb2 import Timestamp
+    from platform_proto.world_pb2 import (
+        Entity, EntityChangeRequest, Controller, Lifetime,
+        DetectionComponent, ImageBoundingBox, Priority,
+    )
+    from platform_proto.world_pb2_grpc import WorldServiceStub
+
+    channel = grpc.insecure_channel("localhost:50051")
+    client = WorldServiceStub(channel)
+
+    CAMERA_ID = "camera-north"
+    CONTROLLER_ID = "my-detector"
+    INFERENCE_INTERVAL = timedelta(seconds=2)  # how often your detector runs
+
+    def push_detection(object_id, label, confidence, bbox, frame_size, frame_time):
+        """Push a single detection to Hydris.
+
+        bbox: (x, y, w, h) in pixels
+        frame_size: (width, height) of the video frame
+        frame_time: datetime of the source frame
+        """
+        ts_from = Timestamp()
+        ts_from.FromDatetime(frame_time)
+        ts_until = Timestamp()
+        ts_until.FromDatetime(frame_time + INFERENCE_INTERVAL)
+
+        entity = Entity(
+            id=f"{CAMERA_ID}~det~{object_id}",
+            label=label,
+            priority=Priority.PriorityImmediate,
+            controller=Controller(id=CONTROLLER_ID),
+            lifetime=Lifetime(
+                **{"from": ts_from},
+                until=ts_until,
+            ),
+            detection=DetectionComponent(
+                detectorEntityId=CAMERA_ID,
+                evidence=[object_id],
+                confidence=confidence,
+                image_bbox=ImageBoundingBox(
+                    x=bbox[0], y=bbox[1],
+                    width=bbox[2], height=bbox[3],
+                    frame_width=frame_size[0],
+                    frame_height=frame_size[1],
+                ),
+            ),
+        )
+        client.Push(EntityChangeRequest(changes=[entity]))
+    ```
+  </Tab>
+  <Tab value="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        "time"
+
+        pb "github.com/projectqai/proto/go"
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/credentials/insecure"
+        "google.golang.org/protobuf/proto"
+        "google.golang.org/protobuf/types/known/timestamppb"
+    )
+
+    const (
+        cameraID          = "camera-north"
+        controllerID      = "my-detector"
+        inferenceInterval = 2 * time.Second // how often your detector runs
+    )
+
+    func pushDetection(client pb.WorldServiceClient, det struct {
+        ObjectID   string
+        Label      string
+        Confidence float32
+        X, Y, W, H uint32
+        FrameW, FrameH uint32
+        FrameTime  time.Time
+    }) error {
+        priority := pb.Priority_PriorityImmediate
+        entity := &pb.Entity{
+            Id:       fmt.Sprintf("%s~det~%s", cameraID, det.ObjectID),
+            Label:    proto.String(det.Label),
+            Priority: &priority,
+            Controller: &pb.Controller{
+                Id: proto.String(controllerID),
+            },
+            Lifetime: &pb.Lifetime{
+                From:  timestamppb.New(det.FrameTime),
+                Until: timestamppb.New(det.FrameTime.Add(inferenceInterval)),
+            },
+            Detection: &pb.DetectionComponent{
+                DetectorEntityId: proto.String(cameraID),
+                Evidence:         []string{det.ObjectID},
+                Confidence:       proto.Float32(det.Confidence),
+                ImageBbox: &pb.ImageBoundingBox{
+                    X: det.X, Y: det.Y,
+                    Width: det.W, Height: det.H,
+                    FrameWidth: det.FrameW, FrameHeight: det.FrameH,
+                },
+            },
+        }
+
+        _, err := client.Push(context.Background(),
+            &pb.EntityChangeRequest{Changes: []*pb.Entity{entity}})
+        return err
+    }
+
+    func main() {
+        conn, _ := grpc.NewClient("localhost:50051",
+            grpc.WithTransportCredentials(insecure.NewCredentials()))
+        client := pb.NewWorldServiceClient(conn)
+
+        pushDetection(client, struct {
+            ObjectID   string
+            Label      string
+            Confidence float32
+            X, Y, W, H uint32
+            FrameW, FrameH uint32
+            FrameTime  time.Time
+        }{
+            ObjectID: "vessel-123", Label: "Cargo Vessel",
+            Confidence: 0.87,
+            X: 312, Y: 140, W: 96, H: 54,
+            FrameW: 1920, FrameH: 1080,
+            FrameTime: time.Now(),
+        })
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Detection Lifecycle
+
+Because each detection carries a `lifetime.until`, detections that are no longer refreshed expire automatically — the engine removes them when `until` is reached. As long as your pipeline keeps pushing updated detections with a new `until` for objects still in view, they stay alive. Objects that leave the field of view simply stop being pushed and expire on their own.
+
+If you need to remove a detection immediately (e.g. the camera goes offline), use `ExpireEntity`:
+
+```typescript
+await client.expireEntity({ id: `${CAMERA_ID}~det~${objectId}` });
+```
+
+## Bearing Computation
+
+When a detection entity has an `image_bbox` and its camera entity has a `fov` value, the engine automatically computes a [BearingComponent](/docs/developer/components#bearingcomponent) for the detection. This gives the detection a world-space azimuth and elevation derived from its pixel position in the frame, which is used for map visualization and track fusion.
+
+You do **not** need to set `BearingComponent` or `GeoSpatialComponent` on detection entities — the engine derives them from the camera's position, orientation, and field of view.
+
+## Batching
+
+For high-throughput pipelines, batch multiple detections into a single `Push` call instead of one call per detection. The `changes` array accepts multiple entities:
+
+```typescript
+const frameTime = new Date();
+const validUntil = new Date(frameTime.getTime() + INFERENCE_INTERVAL_MS);
+
+await client.push({
+  changes: detections.map(det => create(EntitySchema, {
+    id: `${CAMERA_ID}~det~${det.objectId}`,
+    label: det.label,
+    priority: Priority.PriorityImmediate,
+    controller: { id: CONTROLLER_ID },
+    lifetime: {
+      from: timestampFromDate(frameTime),
+      until: timestampFromDate(validUntil),
+    },
+    detection: {
+      detectorEntityId: CAMERA_ID,
+      evidence: [det.objectId],
+      confidence: det.confidence,
+      imageBbox: {
+        x: det.bbox.x, y: det.bbox.y,
+        width: det.bbox.w, height: det.bbox.h,
+        frameWidth: det.frameWidth,
+        frameHeight: det.frameHeight,
+      },
+    },
+  })),
+});
+```
+
+## ID Conventions
+
+Use deterministic IDs so repeated pushes for the same object update the existing entity:
+
+| Pattern | Example | Use case |
+|---------|---------|----------|
+| `{camera}~det~{trackId}` | `cam-1~det~track-42` | Detections correlated to a known track |
+| `{camera}~det~{frameNo}-{idx}` | `cam-1~det~8042-0` | Uncorrelated detections (per-frame index) |
+
+The `~` separator is a Hydris convention for hierarchical IDs. It has no special engine behavior but keeps IDs readable and avoids collisions.
+
+## Next Steps
+
+- [Component Reference](/docs/developer/components#detectioncomponent) — Full field reference for DetectionComponent and ImageBoundingBox
+- [Cameras](/docs/operator/cameras) — Setting up camera entities that detections link to
+- [gRPC / HTTP API](/docs/integration/grpc) — Client library setup for all supported languages

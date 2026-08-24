@@ -1,0 +1,17 @@
+{
+  "title": "Developer Guide",
+  "pages": [
+    "index",
+    "entities",
+    "cookbook",
+    "plugins",
+    "plugin-reference",
+    "storage-plugins",
+    "hal",
+    "components",
+    "policy",
+    "proxy",
+    "merge",
+    "routing"
+  ]
+}

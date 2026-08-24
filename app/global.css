@@ -1,0 +1,75 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* ---------------------------------------------------------------------------
+   Fonts
+   Wired via next/font CSS variables in app/layout.tsx. Swap the stand-ins
+   (Inter / Space Grotesk) for the real brand faces (Circular / Q schengen A)
+   later by dropping the files in and pointing the font variables at them.
+   Nothing else needs to change.
+--------------------------------------------------------------------------- */
+@theme {
+	--font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+	--font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+}
+
+:is(h1, h2, h3, h4, h5, h6) {
+	font-family: var(--font-space-grotesk), var(--font-sans), sans-serif;
+	letter-spacing: -0.01em;
+}
+
+::selection {
+	background-color: var(--color-fd-primary);
+	color: var(--color-fd-primary-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   Hydris brand theme
+   Palette pulled from project-q.ai/hydris:
+     dark green bg  #0b1311 / #0d1815 / #101815
+     surfaces       #243029
+     mint (primary) #77fe90 / #8ee4a6
+     lavender       #c1b5ee
+     text           #d9ebe0
+--------------------------------------------------------------------------- */
+
+/* Light — complementary variant keeping the mint + lavender brand hues. */
+:root {
+	--color-fd-background: #f4f8f5;
+	--color-fd-foreground: #0b1311;
+	--color-fd-card: #ffffff;
+	--color-fd-card-foreground: #0b1311;
+	--color-fd-popover: #ffffff;
+	--color-fd-popover-foreground: #0b1311;
+	--color-fd-muted: #e5efe8;
+	--color-fd-muted-foreground: #55665d;
+	--color-fd-border: #d5e3da;
+	--color-fd-primary: #12915a;
+	--color-fd-primary-foreground: #ffffff;
+	--color-fd-secondary: #e5efe8;
+	--color-fd-secondary-foreground: #0b1311;
+	--color-fd-accent: #e5efe8;
+	--color-fd-accent-foreground: #5a4bb0;
+	--color-fd-ring: #12915a;
+}
+
+/* Dark — matched to the Hydris site. */
+.dark {
+	--color-fd-background: #0b1311;
+	--color-fd-foreground: #d9ebe0;
+	--color-fd-card: #0d1815;
+	--color-fd-card-foreground: #d9ebe0;
+	--color-fd-popover: #101815;
+	--color-fd-popover-foreground: #d9ebe0;
+	--color-fd-muted: #16211d;
+	--color-fd-muted-foreground: #8ea99a;
+	--color-fd-border: #243029;
+	--color-fd-primary: #77fe90;
+	--color-fd-primary-foreground: #0b1311;
+	--color-fd-secondary: #16211d;
+	--color-fd-secondary-foreground: #d9ebe0;
+	--color-fd-accent: #243029;
+	--color-fd-accent-foreground: #c1b5ee;
+	--color-fd-ring: #77fe90;
+}

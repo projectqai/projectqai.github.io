@@ -1,0 +1,229 @@
+---
+title: Developing Plugins
+description: Build, publish and run TypeScript plugins for Hydris
+---
+
+Plugins are just regular TypeScript that connects to the local engine over grpc. There is a convenience wrapper for the most common plugin type that has exactly one configurable. You don't need to use it, but it makes life easier to start with that.
+
+We'll build one from scratch, using the built-in [HexDB plugin](https://github.com/projectqai/hydris/tree/main/plugins/hexdb) as an example. It enriches ADS-B aircraft entities with images and registration data from [hexdb.io](https://hexdb.io).
+
+## Set up the project
+
+```bash
+bun create projectqai/plugin-template my-plugin
+cd my-plugin
+```
+
+You get a working plugin with TypeScript, a formatter and linter ([Biome](https://biomejs.dev)), and scripts for dev, build, lint, and typecheck. Here's the `package.json`:
+
+```json
+{
+  "name": "my-plugin",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "type": "module",
+  "hydris": {
+    "compat": ">=0.0.20 <0.1.0"
+  },
+  "scripts": {
+    "dev": "hydris plugin run index.ts --watch --server localhost:50051",
+    "build": "hydris plugin build .",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@projectqai/proto": "*"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13",
+    "@types/bun": "1.3.13",
+    "typescript": "^5.8.0"
+  }
+}
+```
+
+`hydris.compat` is a [semver range](https://github.com/blang/semver#ranges) declaring which Hydris versions this plugin supports. Checked at startup. Optional, but recommended.
+
+There's also a `tsconfig.json` and `biome.json` already set up. If you're on VS Code or Cursor the formatter works out of the box; for other editors see the [Biome editor guide](https://biomejs.dev/guides/integrate-in-editor/).
+
+## Watch the world
+
+Every plugin starts with `attach` from `@projectqai/proto/device`. This connects to the Hydris engine, registers the plugin as a device entity, and calls your `run` function. The template gives you this out of the box — let's walk through it:
+
+```typescript
+import {
+  attach,
+  create,
+  EntityChange,
+  EntityFilterSchema,
+  ListEntitiesRequestSchema,
+} from "@projectqai/proto/device";
+
+await attach({
+  id: "my-plugin.service",
+  label: "My Plugin",
+  controller: "my-plugin",
+  device: { category: "Custom" },
+
+  run: async (client, config, signal) => {
+    const stream = client.watchEntities(
+      create(ListEntitiesRequestSchema, {
+        filter: create(EntityFilterSchema, {}),
+        behaviour: { maxRateHz: 1 },
+      }),
+      { signal },
+    );
+
+    for await (const event of stream) {
+      if (!event.entity) continue;
+
+      console.log(
+        event.t === EntityChange.EntityChangeUpdated ? "updated" : "other",
+        event.entity.id,
+        event.entity.label,
+      );
+    }
+  },
+});
+```
+
+- `id` — unique entity ID for this plugin instance, shows up in the world
+- `controller` — groups related plugins in the UI
+- `run` — called with a gRPC client, typed config (more on this later), and an `AbortSignal`
+- The empty filter watches everything; `maxRateHz` throttles update frequency
+
+Fire it up and you should see entities streaming by:
+
+```bash
+bun run dev
+```
+
+This bundles the TypeScript, uploads it to the engine, and runs it in-process. Logs stream back to your terminal. Press Ctrl+C to unload.
+
+From here you could send the entities somewhere else and you already have an integration. We're going to enrich them and send them back to the world engine.
+
+## Make it do something
+
+We can filter for specific entities, enrich them with your own data, and push changes back. This is exactly what the [HexDB plugin](https://github.com/projectqai/hydris/blob/main/plugins/hexdb/index.ts) does to add aircraft photos.
+
+```typescript
+import {
+  attach,
+  create,
+  EntityChange,
+  EntityFilterSchema,
+  EntitySchema,
+  ListEntitiesRequestSchema,
+  push,
+} from "@projectqai/proto/device";
+
+let seenCount = 0;
+let enrichedCount = 0;
+
+await attach({
+  id: "my-plugin.service",
+  label: "My Plugin",
+  controller: "my-plugin",
+  device: { category: "Custom" },
+
+  schema: {
+    enabled: {
+      type: "boolean",
+      title: "Enable enrichment",
+      default: true,
+    },
+  } as const,
+  config: { enabled: true },
+
+  run: async (client, config, signal) => {
+    const stream = client.watchEntities(
+      create(ListEntitiesRequestSchema, {
+        filter: create(EntityFilterSchema, { component: [27] }),
+        behaviour: { maxRateHz: 1 },
+      }),
+      { signal },
+    );
+
+    for await (const event of stream) {
+      if (event.t !== EntityChange.EntityChangeUpdated) continue;
+      if (!event.entity) continue;
+
+      seenCount++;
+
+      if (!config.enabled) continue;
+
+      const enriched = create(EntitySchema, {
+        id: event.entity.id,
+        label: "Enriched: " + event.entity.id,
+      });
+
+      await push(client, enriched);
+      enrichedCount++;
+    }
+  },
+
+  health: () => ({
+    1: { label: "entities seen", value: seenCount },
+    2: { label: "entities enriched", value: enrichedCount },
+  }),
+});
+```
+
+What changed from the first example:
+
+- `schema` and `config` — declare config fields that users can toggle in the UI. The `config` argument in `run()` is typed from the schema.
+- `component: [27]` — only watch entities with a transponder. See the [component reference](/docs/developer/components) for all field numbers.
+- `push()` — create an entity with the same ID, set the fields you want to add, and push it back. The engine merges using last-writer-wins per component.
+- `health()` — called every 10 seconds. The metrics show up in the UI and each call extends the plugin's heartbeat.
+
+## Iterate with watch mode
+
+`bun run dev` already runs with `--watch`, which rebuilds and restarts on file changes. If you need a different server address, edit the `dev` script in `package.json`.
+
+If the engine is on a different host, use `--server`:
+
+```bash
+hydris plugin run index.ts --server remote-host:50051
+```
+
+TypeScript is bundled with esbuild automatically. Plain `.js` files work too. The plugin is unloaded when you disconnect (Ctrl+C, network loss, etc.).
+
+## Build an OCI image
+
+Happy with your plugin? Package it up:
+
+```bash
+hydris plugin build . -t ghcr.io/projectqai/hydris/my-plugin:0.1.0
+```
+
+This reads `package.json`, bundles the entry point, and loads the image into the local Docker daemon. If you omit `-t`, the tag is derived from `name` and `version` in `package.json`.
+
+## Publish to a registry
+
+```bash
+docker push ghcr.io/projectqai/hydris/my-plugin:0.1.0
+```
+
+That's it. Your plugin is now available to anyone with access to the registry.
+
+## Push as an artifact
+
+No registry? Upload the `.tar` from `hydris plugin build` straight to a node:
+
+```bash
+hydris artifact put my-plugin_0.1.0.tar --id my-plugin
+```
+
+Then use `artifact://my-plugin` in the Custom Plugin panel, or a mission pack.
+
+## Install plugins
+
+Plugins from the registry or custom plugin feeds are managed through the Hydris UI. OCI images are pulled and run in-process by the engine. Credentials for private registries can be configured via the Custom Plugins panel.
+
+## Next steps
+
+- [Plugin Reference](/docs/developer/plugin-reference) — Lifecycle, filtering, config schema, init, health metrics, data files, and the full `attach()` API
+- [Storage Plugins](/docs/developer/storage-plugins) — Build custom artifact storage backends (S3, GCS, MinIO, etc.)
+- [Node Peripherals](/docs/developer/hal) — Access Bluetooth Low Energy, serial ports, device discovery, and push sensor metrics from plugins
+- [Component Reference](/docs/developer/components) — All available entity components and their field numbers

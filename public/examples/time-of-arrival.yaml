@@ -1,0 +1,306 @@
+# Time of arrival: three tripwire sensors, and the event that made them fire.
+#
+# Seven entities:
+#   example.toa.wire.a    a tripwire sensor
+#   example.toa.wire.b    a tripwire sensor, 202 m east of A
+#   example.toa.wire.c    a tripwire sensor, 195 m north of A
+#   example.toa.det.b     B heard something first, at 09:14:02.386
+#   example.toa.det.a     A heard it 114 ms later, at 09:14:02.500
+#   example.toa.det.c     C heard it last, at 09:14:02.816
+#   example.toa.track.1   where the sound came from
+#
+# The event is south of all three sensors, outside the triangle they form.
+# Nothing in the input says that. It comes only from the order of the three
+# arrival times, and from the gaps between them.
+#
+# One tripwire cannot say where a sound came from. It says only that a sound
+# reached it, and when. Sound travels 343 m each second, so the difference
+# between two arrival times is a difference in distance. Three sensors give
+# two independent differences, which is enough for a position in two
+# dimensions. The fusion engine solves for the position and the moment of the
+# event together.
+#
+# The measurement is the timestamp. Each sensor puts its arrival time in
+# `lifetime.fresh`, which is the field for when an observation happened.
+#
+# push it with:  hydris ec apply time-of-arrival.yaml
+
+---
+# Sensor A.
+id: example.toa.wire.a
+label: Tripwire A
+
+geo:
+  latitude: 54.1800
+  longitude: 12.0860
+  altitude: 4
+
+device:
+  class: tripwire
+  category: Ground
+  state: DeviceStateActive
+  unique_hardware_id: a84041c6545d1401
+
+link:
+  status: LinkStatusConnected
+  rssi_dbm: -88
+
+power:
+  battery_charge_remaining: 0.76
+  voltage: 3.9
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          acoustic: {}
+
+symbol:
+  milStd2525C: SFGPESE---
+
+routing:
+  channels:
+    - {}
+
+---
+# Sensor B, 202 m east of A.
+id: example.toa.wire.b
+label: Tripwire B
+
+geo:
+  latitude: 54.1800
+  longitude: 12.0891
+  altitude: 4
+
+device:
+  class: tripwire
+  category: Ground
+  state: DeviceStateActive
+  unique_hardware_id: a84041c6545d1402
+
+link:
+  status: LinkStatusConnected
+  rssi_dbm: -91
+
+power:
+  battery_charge_remaining: 0.71
+  voltage: 3.8
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          acoustic: {}
+
+symbol:
+  milStd2525C: SFGPESE---
+
+routing:
+  channels:
+    - {}
+
+---
+# Sensor C, 195 m north of A. Three sensors that are not in one line give a
+# position. Three sensors in one line do not.
+id: example.toa.wire.c
+label: Tripwire C
+
+geo:
+  latitude: 54.1815
+  longitude: 12.08755
+  altitude: 4
+
+device:
+  class: tripwire
+  category: Ground
+  state: DeviceStateActive
+  unique_hardware_id: a84041c6545d1403
+
+link:
+  status: LinkStatusConnected
+  rssi_dbm: -84
+
+power:
+  battery_charge_remaining: 0.80
+  voltage: 3.9
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          acoustic: {}
+
+symbol:
+  milStd2525C: SFGPESE---
+
+routing:
+  channels:
+    - {}
+
+---
+# What sensor A reported. The sound reached it 114 ms after B.
+#
+# The sensor knows the time, and nothing else. It cannot give a direction or a
+# distance, so the detection sits on the sensor inside a large circle. Do not
+# guess a position here. The circle is honest, and the fusion engine replaces
+# it with a real one.
+id: example.toa.det.a
+label: Acoustic Trip A
+
+controller:
+  id: example.toa.wire.a
+
+priority: PriorityImmediate
+
+# the arrival time. this is the whole measurement
+lifetime:
+  fresh: "2026-03-01T09:14:02.500Z"
+
+detection:
+  detectorEntityId: example.toa.wire.a
+  confidence: 0.6
+
+pose:
+  parent: example.toa.wire.a
+  cartesian:
+    covariance:
+      mxx: 250000
+      myy: 250000
+
+routing:
+  channels:
+    - {}
+
+---
+# What sensor B reported. It is nearest to the event, so it heard the sound
+# first.
+id: example.toa.det.b
+label: Acoustic Trip B
+
+controller:
+  id: example.toa.wire.b
+
+priority: PriorityImmediate
+
+lifetime:
+  fresh: "2026-03-01T09:14:02.386Z"
+
+detection:
+  detectorEntityId: example.toa.wire.b
+  confidence: 0.5
+
+pose:
+  parent: example.toa.wire.b
+  cartesian:
+    covariance:
+      mxx: 250000
+      myy: 250000
+
+routing:
+  channels:
+    - {}
+
+---
+# What sensor C reported. It is the furthest away, so it heard the sound last,
+# 430 ms after B. That large gap is what puts the event south of the others.
+id: example.toa.det.c
+label: Acoustic Trip C
+
+controller:
+  id: example.toa.wire.c
+
+priority: PriorityImmediate
+
+lifetime:
+  fresh: "2026-03-01T09:14:02.816Z"
+
+detection:
+  detectorEntityId: example.toa.wire.c
+  confidence: 0.7
+
+pose:
+  parent: example.toa.wire.c
+  cartesian:
+    covariance:
+      mxx: 250000
+      myy: 250000
+
+routing:
+  channels:
+    - {}
+
+---
+# The fused result.
+#
+# The fusion engine reads the three arrival times, solves for the position and
+# the moment of the event, and pushes this entity.
+#
+# The output is a track. A detection is what one sensor measured. A track is a
+# located thing, and the rule is that simple: if you can say where it is, it
+# is a track. Three tripwires that could each say only "something is near me"
+# become one point that a person can act on.
+#
+# `track.evidence` names the three detections, so an operator can ask which
+# sensors produced this point, and a later stage can use them again.
+#
+# `lifetime.fresh` holds the moment the fusion engine solved for. It is 386 ms
+# before the first sensor heard anything, because the sound needed that long
+# to travel 132 m.
+#
+# The covariance follows from the clock. These sensors share time over a radio
+# to about 10 ms, and 10 ms of sound is 3.4 m. The result is 4.5 m of error
+# east and 16.9 m north. The ellipse points north because the event lies south
+# of all three sensors. All three measure the distance to the south in nearly
+# the same direction, so nothing constrains it well. An event inside the
+# triangle gives a round ellipse. Better clocks give a smaller one.
+#
+# There is no symbol here. The classification is still pending, so the engine
+# derives a pending symbol from the taxonomy.
+id: example.toa.track.1
+label: TRK-0031
+
+controller:
+  id: example.fusion.toa
+
+lifetime:
+  fresh: "2026-03-01T09:14:02.000Z"
+
+track:
+  # which fusion engine produced this
+  tracker: example.fusion.toa
+  confidence: 0.83
+
+  evidence:
+    - example.toa.det.a
+    - example.toa.det.b
+    - example.toa.det.c
+
+geo:
+  latitude: 54.1790
+  longitude: 12.0880
+  altitude: 4
+  # meters squared, local ENU frame. xx=east, yy=north, xy=correlation
+  covariance:
+    mxx: 20.1
+    myy: 285.5
+    mxy: -42.2
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.5
+        pending: true
+      person: {}
+
+routing:
+  channels:
+    - {}

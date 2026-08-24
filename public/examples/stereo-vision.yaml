@@ -1,0 +1,248 @@
+# Stereo vision: two cameras, and a fusion engine that triangulates them.
+#
+# Five entities:
+#   example.stereo.cam.west   the left camera
+#   example.stereo.cam.east   the right camera, 202 m east of it
+#   example.stereo.det.west   what the left camera saw
+#   example.stereo.det.east   what the right camera saw
+#   example.stereo.track.1    the position both bearings agree on
+#
+# One camera gives a direction and no distance. Two cameras that see the same
+# object give two directions that cross. The point where they cross is the
+# position. This is the smallest useful fusion in the system, and it needs no
+# new component.
+#
+# Three jobs stay separate, and each part writes only what it knows:
+#   the detector reports a pixel box
+#   the engine converts the pixel box into a bearing
+#   the fusion engine crosses two bearings and pushes the position
+#
+# Neither camera knows that the other exists. A third camera adds a third
+# detection, and only the fusion engine changes.
+#
+# push it with:  hydris ec apply stereo-vision.yaml
+
+---
+# The left camera.
+id: example.stereo.cam.west
+label: Stereo West
+
+geo:
+  latitude: 54.1800
+  longitude: 12.0860
+  altitude: 12
+
+camera:
+  fov: 60
+  range_max: 2000
+  streams:
+    - label: Main
+      url: rtsp://stereo-west.example.org/main
+      protocol: MediaStreamProtocolRtsp
+      role: MediaStreamRoleMain
+      codec: H264
+
+device:
+  class: camera
+  category: Ground
+  state: DeviceStateActive
+  unique_hardware_id: stereo.west.7731
+
+link:
+  status: LinkStatusConnected
+  avg_latency_ms: 12
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          electro_optical: {}
+
+symbol:
+  milStd2525C: SFGPE-----
+
+routing:
+  channels:
+    - {}
+
+---
+# The right camera. 202 m east of the left one.
+# The distance between the two cameras is the baseline. A long baseline gives
+# a good position. A short baseline gives a long, thin error ellipse.
+id: example.stereo.cam.east
+label: Stereo East
+
+geo:
+  latitude: 54.1800
+  longitude: 12.0891
+  altitude: 12
+
+camera:
+  fov: 60
+  range_max: 2000
+  streams:
+    - label: Main
+      url: rtsp://stereo-east.example.org/main
+      protocol: MediaStreamProtocolRtsp
+      role: MediaStreamRoleMain
+      codec: H264
+
+device:
+  class: camera
+  category: Ground
+  state: DeviceStateActive
+  unique_hardware_id: stereo.east.7732
+
+link:
+  status: LinkStatusConnected
+  avg_latency_ms: 11
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          electro_optical: {}
+
+symbol:
+  milStd2525C: SFGPE-----
+
+routing:
+  channels:
+    - {}
+
+---
+# What the left camera saw.
+#
+# The detector reports pixels, because pixels are what it has. It pushes no
+# pose and no angle at all.
+#
+# The engine reads `image_bbox`, takes the field of view and the frame size
+# from the camera, and calculates the pose with a pinhole model. It adds the
+# current pan and tilt of the camera. Here the box centre sits 419 px right
+# of the centre of a 3840 px frame at 60 degrees, which is 7.181 degrees.
+#
+# The engine also converts the width and the height of the box into the
+# angular size of the object.
+id: example.stereo.det.west
+label: Contact (west)
+
+controller:
+  id: example.detector.yolo
+
+priority: PriorityImmediate
+
+detection:
+  detectorEntityId: example.stereo.cam.west
+  confidence: 0.82
+  image_bbox:
+    x: 2294
+    y: 975
+    width: 90
+    height: 210
+    frame_width: 3840
+    frame_height: 2160
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.8
+      vehicle:
+        land:
+          multi_wheeled: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# What the right camera saw: the same object, from 202 m away.
+#
+# The box sits left of centre here, so the engine calculates 352.819 degrees.
+# The two bearings differ by 14.4 degrees, and that angle is the measurement.
+id: example.stereo.det.east
+label: Contact (east)
+
+controller:
+  id: example.detector.yolo
+
+priority: PriorityImmediate
+
+detection:
+  detectorEntityId: example.stereo.cam.east
+  confidence: 0.79
+  image_bbox:
+    x: 1456
+    y: 975
+    width: 90
+    height: 210
+    frame_width: 3840
+    frame_height: 2160
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.75
+      vehicle:
+        land:
+          multi_wheeled: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# The fused result: the point where the two bearings cross.
+#
+# The fusion engine reads both detections, intersects the two lines, and
+# pushes this entity. `evidence` names the two detections, so an operator can
+# ask which cameras produced this position, and a later fuser can re-use them.
+#
+# The covariance is the interesting part. Both cameras are 808 m from the
+# object and know their angle to 0.5 degrees. That gives 5 m of error across
+# the line of sight, and 40 m along it. A short baseline always makes the
+# ellipse long in the viewing direction. To improve the depth, move the
+# cameras apart. To improve both, add a third camera.
+id: example.stereo.track.1
+label: TRK-0007
+
+controller:
+  id: example.fusion.stereo
+
+track:
+  # which fusion engine produced this
+  tracker: example.fusion.stereo
+  confidence: 0.88
+
+  evidence:
+    - example.stereo.det.west
+    - example.stereo.det.east
+
+geo:
+  latitude: 54.1872
+  longitude: 12.08755
+  altitude: 12
+  # meters squared, local ENU frame. xx=east, yy=north
+  covariance:
+    mxx: 25
+    myy: 1590
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.85
+      vehicle:
+        land:
+          multi_wheeled: {}
+
+symbol:
+  milStd2525C: SUGPU-----
+
+routing:
+  channels:
+    - {}

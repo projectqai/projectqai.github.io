@@ -1,0 +1,233 @@
+---
+title: Node Peripherals
+description: Use Bluetooth Low Energy, serial ports, and sensors from plugins
+---
+
+Plugins can access Bluetooth Low Energy devices and serial ports through the `Hydris` global object. This is a Hardware Abstraction Layer (HAL) that works across Linux, macOS, Windows, and Android.
+
+To get type checking, add the HAL types:
+
+```bash
+bun add @projectqai/hal
+```
+
+Then reference them at the top of your entry point:
+
+```typescript
+/// <reference types="@projectqai/hal" />
+```
+
+## Bluetooth Low Energy
+
+Use `Hydris.bluetooth.requestDevice()` to connect to a BLE device by address. The API follows the [Web Bluetooth](https://developer.mozilla.org/en-US/docs/Web/API/Web_Bluetooth_API) pattern — request a device, connect to its GATT server, discover services, then read/write characteristics.
+
+```typescript
+const ble = Hydris.bluetooth.requestDevice("AA:BB:CC:DD:EE:FF");
+const server = await ble.gatt.connect();
+
+try {
+  // Discover a service by UUID
+  const service = await server.getPrimaryService("0000180a-0000-1000-8000-00805f9b34fb");
+
+  // Read a characteristic
+  const char = await service.getCharacteristic("00002a24-0000-1000-8000-00805f9b34fb");
+  const value = await char.readValue(); // ArrayBuffer
+  console.log(new TextDecoder().decode(value));
+
+  // Write to a characteristic
+  await char.writeValue(new Uint8Array([0x01, 0x02]));
+} finally {
+  ble.gatt.disconnect();
+}
+```
+
+### Subscribing to notifications
+
+For characteristics that push data (heart rate monitors, sensor streams, etc.), use `startNotifications()`:
+
+```typescript
+const char = await service.getCharacteristic("some-uuid");
+await char.startNotifications();
+
+char.addEventListener("characteristicvaluechanged", (evt) => {
+  const data = new Uint8Array(evt.target.value); // ArrayBuffer
+  console.log("received", data);
+});
+
+// Later, to stop:
+await char.stopNotifications();
+```
+
+### BLE as a serial stream
+
+Some BLE devices expose a serial-like protocol over two characteristics (one for reading, one for writing). `openBLEStream()` wraps this into a `SerialPort`-like interface:
+
+```typescript
+const port = await Hydris.bluetooth.openBLEStream("AA:BB:CC:DD:EE:FF", {
+  writeCharacteristic: "6e400002-b5a3-f393-e0a9-e50e24dcca9e",
+  readCharacteristic: "6e400003-b5a3-f393-e0a9-e50e24dcca9e",
+});
+
+port.addEventListener("data", (evt) => {
+  console.log("rx:", new Uint8Array(evt.data!));
+});
+
+await port.write(new Uint8Array([0x01, 0x02]));
+
+// When done:
+port.close();
+```
+
+## Serial ports
+
+Open a serial port by device path. The default baud rate is 115200.
+
+```typescript
+const port = await Hydris.serial.open("/dev/ttyUSB0", 9600);
+
+port.addEventListener("data", (evt) => {
+  console.log("rx:", new Uint8Array(evt.data!));
+});
+
+port.addEventListener("close", (evt) => {
+  console.log("port closed", evt.error);
+});
+
+await port.write(new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f]));
+
+port.close();
+```
+
+### SerialPort events
+
+The `SerialPort` interface (used by both `Hydris.serial.open()` and `Hydris.bluetooth.openBLEStream()`) emits two events:
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `"data"` | `{ type: "data", data: ArrayBuffer }` | Incoming bytes |
+| `"close"` | `{ type: "close", error?: string }` | Port closed, optionally with an error reason |
+
+Both `addEventListener` calls support `{ once: true }` for one-shot listeners.
+
+## Discovering BLE devices
+
+Hardware discovery is handled by the engine's built-in HAL service, not by your plugin directly. Discovered BLE devices appear as entities in the world with a `device.ble` component containing the device address and advertised service UUIDs.
+
+Your plugin watches for them using entity filters:
+
+```typescript
+import {
+  create, EntityFilterSchema, ListEntitiesRequestSchema,
+  EntityChange, attach, push
+} from "@projectqai/proto/device";
+import { DeviceFilterSchema, BleDeviceFilterSchema } from "@projectqai/proto/world";
+
+const SERVICE_UUIDS = [
+  "b42e1c08-ade7-11e4-89d3-123b93f75cba",
+  "b42e4a8e-ade7-11e4-89d3-123b93f75cba",
+];
+
+const stream = client.watchEntities(create(ListEntitiesRequestSchema, {
+  filter: create(EntityFilterSchema, {
+    // Match entities advertising any of these BLE service UUIDs
+    or: SERVICE_UUIDS.map((uuid) =>
+      create(EntityFilterSchema, {
+        device: create(DeviceFilterSchema, {
+          ble: create(BleDeviceFilterSchema, { serviceUuids: [uuid] }),
+        }),
+      }),
+    ),
+  }),
+}), { signal });
+
+for await (const event of stream) {
+  if (!event.entity) continue;
+
+  if (event.t === EntityChange.EntityChangeUpdated) {
+    const address = event.entity.device?.ble?.address;
+    if (address) {
+      const ble = Hydris.bluetooth.requestDevice(address);
+      const server = await ble.gatt.connect();
+      // ... read sensors, then disconnect
+      ble.gatt.disconnect();
+    }
+  } else if (event.t === EntityChange.EntityChangeExpired) {
+    // Device is no longer visible — stop polling it
+  }
+}
+```
+
+## Pushing metrics
+
+When reading sensors, push structured metrics using `MetricComponentSchema`. Each metric has a unique ID (within the entity), a kind, a unit, and a value:
+
+```typescript
+import { MetricComponentSchema, MetricSchema, MetricKind, MetricUnit } from "@projectqai/proto/metrics";
+
+await push(client, create(EntitySchema, {
+  id: "my-sensor.device.001",
+  metric: create(MetricComponentSchema, {
+    metrics: [
+      create(MetricSchema, {
+        id: 1,
+        label: "Temperature",
+        kind: MetricKind.MetricKindTemperature,
+        unit: MetricUnit.MetricUnitCelsius,
+        val: { case: "float", value: 22.5 },
+      }),
+      create(MetricSchema, {
+        id: 2,
+        label: "Humidity",
+        kind: MetricKind.MetricKindHumidity,
+        unit: MetricUnit.MetricUnitPercent,
+        val: { case: "float", value: 45.0 },
+      }),
+    ],
+  }),
+}));
+```
+
+Metric IDs must be stable across pushes — use the same ID for the same measurement so the UI can track it over time.
+
+## API reference
+
+### Hydris.bluetooth
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `requestDevice(address)` | `BluetoothDevice` | Get a device handle by MAC address |
+| `openBLEStream(address, opts)` | `Promise<SerialPort>` | Wrap a BLE connection as a serial stream |
+
+### Hydris.serial
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `open(path, baudRate?)` | `Promise<SerialPort>` | Open a serial port (default 115200 baud) |
+
+### BluetoothDevice
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Device address |
+| `name` | `string` | Device name |
+| `gatt` | `BluetoothRemoteGATTServer` | GATT server for connecting |
+
+### BluetoothRemoteGATTServer
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `connected` | `boolean` | Whether currently connected |
+| `connect()` | `Promise<BluetoothRemoteGATTServer>` | Connect to the device |
+| `disconnect()` | `void` | Disconnect and release resources |
+| `getPrimaryService(uuid)` | `Promise<BluetoothRemoteGATTService>` | Discover a GATT service |
+
+### BluetoothRemoteGATTCharacteristic
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `uuid` | `string` | Characteristic UUID |
+| `readValue()` | `Promise<ArrayBuffer>` | Read the current value |
+| `writeValue(data)` | `Promise<void>` | Write a `Uint8Array` |
+| `startNotifications()` | `Promise<BluetoothRemoteGATTCharacteristic>` | Subscribe to value changes |
+| `stopNotifications()` | `Promise<BluetoothRemoteGATTCharacteristic>` | Unsubscribe |
+| `addEventListener(event, handler, opts?)` | `void` | Listen for `"characteristicvaluechanged"` |

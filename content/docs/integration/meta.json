@@ -1,0 +1,21 @@
+{
+  "title": "Integration Guide",
+  "pages": [
+    "index",
+    "atak",
+    "asterix",
+    "mavlink",
+    "ais",
+    "adsb",
+    "spacetrack",
+    "edgetx",
+    "meshtastic",
+    "reolink",
+    "axis",
+    "ros2",
+    "external-detectors",
+    "tailscale",
+    "object-storage",
+    "grpc"
+  ]
+}

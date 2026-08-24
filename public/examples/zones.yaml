@@ -1,0 +1,35 @@
+---
+# A fenced perimeter as a closed polygon.
+# All rings must be closed: the last point repeats the first.
+id: example.zone.perimeter
+label: Site Perimeter
+
+shape:
+  geometry:
+    planar:
+      polygon:
+        outer:
+          points:
+            - { longitude: 12.0862, latitude: 54.1770 }
+            - { longitude: 12.0928, latitude: 54.1770 }
+            - { longitude: 12.0928, latitude: 54.1806 }
+            - { longitude: 12.0862, latitude: 54.1806 }
+            - { longitude: 12.0862, latitude: 54.1770 }
+
+---
+# A no-fly cylinder: a circle extruded to 120 m.
+id: example.zone.nofly
+label: No-Fly Cylinder
+
+shape:
+  geometry:
+    planar:
+      circle:
+        center: { longitude: 12.0895, latitude: 54.1788 }
+        radius_m: 1500
+      line_style: LineStyleDashed
+  extrusion:
+    height_m: 120
+    fill:
+      color: "#ef4444"
+      opacity: 0.10

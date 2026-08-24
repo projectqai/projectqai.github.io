@@ -1,0 +1,22 @@
+# The smallest useful entity: a point on the map.
+#
+#   geo     where it is
+#   symbol  how it is drawn (MIL-STD-2525C)
+#   routing without this component the entity never leaves the local node
+#
+# push it with:  hydris ec apply marker.yaml
+
+id: example.site.cp1
+label: Checkpoint Bravo
+
+geo:
+  latitude: 54.1782
+  longitude: 12.0895
+  altitude: 12
+
+symbol:
+  milStd2525C: SFGPU-----
+
+routing:
+  channels:
+    - {}

@@ -1,0 +1,230 @@
+---
+title: Storage Plugins
+description: Build a plugin that provides artifact storage backends like S3, GCS, or MinIO
+---
+
+Storage plugins extend the artifact system with custom blob storage backends. When active, artifacts are stored in your backend instead of (or in addition to) local disk. The built-in S3 plugin at `plugins/s3storage/` is a complete reference implementation.
+
+## How it works
+
+1. Your plugin registers itself as a device entity with a configuration schema
+2. The user fills in credentials via the UI
+3. Your plugin validates the credentials, then registers a store via `Hydris.artifacts.registerStore()`
+4. The engine routes artifact uploads and downloads through your store
+5. When the plugin shuts down, the store is automatically unregistered
+
+## Minimal example
+
+```typescript
+// my-storage/index.ts
+
+declare const Hydris: {
+  artifacts: {
+    registerStore(
+      name: string,
+      callbacks: {
+        get(id: string): Promise<Response>;
+        put(id: string, data: Uint8Array): Promise<void>;
+        delete(id: string): Promise<void>;
+        exists(id: string): Promise<boolean>;
+      },
+    ): void;
+  };
+};
+
+const server = process.env.HYDRIS_SERVER || "http://localhost:50051";
+const entityId = "artifacts.my-storage";
+
+// --- RPC helpers ---
+
+async function rpc(service: string, method: string, body: any): Promise<any> {
+  const resp = await fetch(`${server}/${service}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`${method} failed: ${resp.status}`);
+  return resp.json();
+}
+
+async function push(entities: any[]): Promise<void> {
+  await rpc("world.WorldService", "Push", { changes: entities });
+}
+
+async function getEntity(id: string): Promise<any> {
+  return (await rpc("world.WorldService", "GetEntity", { id })).entity;
+}
+
+// --- Configuration schema ---
+
+const schema = {
+  type: "object",
+  properties: {
+    api_key: {
+      type: "string",
+      title: "API Key",
+      "ui:widget": "password",
+    },
+    base_url: {
+      type: "string",
+      title: "Endpoint URL",
+    },
+  },
+};
+
+// Register the entity so it appears in the UI.
+await push([{
+  id: entityId,
+  label: "My Storage",
+  controller: { id: "artifacts" },
+  device: { parent: "artifacts.service", category: "Storage" },
+  configurable: { label: "My Storage", schema },
+  interactivity: { icon: "database" },
+}]);
+
+// --- Wait for config ---
+
+let config: any;
+while (true) {
+  const entity = await getEntity(entityId);
+  if (entity?.config?.value?.api_key && entity?.config?.value?.base_url) {
+    config = entity.config.value;
+    break;
+  }
+  await new Promise((r) => setTimeout(r, 3000));
+}
+
+// --- Validate and register ---
+
+// Validate credentials against your backend here.
+// If validation fails, report it:
+//   await push([{
+//     id: entityId,
+//     device: { ..., state: "DeviceStateFailed", error: "..." },
+//     configurable: { ..., state: "ConfigurableStateFailed", error: "..." },
+//   }]);
+//   throw new Error("...");
+
+Hydris.artifacts.registerStore("my-storage", {
+  async get(id) {
+    const resp = await fetch(`${config.base_url}/blobs/${id}`, {
+      headers: { Authorization: `Bearer ${config.api_key}` },
+    });
+    if (!resp.ok) throw new Error(`GET failed: ${resp.status}`);
+    return resp;
+  },
+
+  async put(id, data) {
+    const resp = await fetch(`${config.base_url}/blobs/${id}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${config.api_key}` },
+      body: data,
+    });
+    if (!resp.ok) throw new Error(`PUT failed: ${resp.status}`);
+  },
+
+  async delete(id) {
+    await fetch(`${config.base_url}/blobs/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${config.api_key}` },
+    });
+  },
+
+  async exists(id) {
+    const resp = await fetch(`${config.base_url}/blobs/${id}`, {
+      method: "HEAD",
+      headers: { Authorization: `Bearer ${config.api_key}` },
+    });
+    return resp.ok;
+  },
+});
+
+// Report healthy status.
+await push([{
+  id: entityId,
+  device: { parent: "artifacts.service", category: "Storage", state: "DeviceStateActive" },
+  configurable: { label: "My Storage", schema, state: "ConfigurableStateActive" },
+}]);
+
+// Stay alive. Store unregisters automatically when the plugin exits.
+await new Promise(() => {});
+```
+
+## Store callbacks
+
+The `registerStore` function takes a name and four async callbacks:
+
+| Callback | Signature | Description |
+|----------|-----------|-------------|
+| `get` | `(id: string) => Promise<Response>` | Return the blob data as a fetch `Response`. The engine reads the body. |
+| `put` | `(id: string, data: Uint8Array) => Promise<void>` | Store the blob. `data` contains the full artifact bytes. |
+| `delete` | `(id: string) => Promise<void>` | Delete the blob. Should not error if already deleted. |
+| `exists` | `(id: string) => Promise<boolean>` | Return `true` if the blob exists. |
+
+The `id` parameter is the artifact's ID from the `ArtifactComponent`.
+
+## Entity state reporting
+
+Use the proto enum names when setting state via JSON:
+
+| Proto Enum | JSON Value |
+|-----------|------------|
+| `DeviceStatePending` | `"DeviceStatePending"` |
+| `DeviceStateActive` | `"DeviceStateActive"` |
+| `DeviceStateFailed` | `"DeviceStateFailed"` |
+| `ConfigurableStateActive` | `"ConfigurableStateActive"` |
+| `ConfigurableStateFailed` | `"ConfigurableStateFailed"` |
+
+When pushing state updates, always include the `schema` in the `configurable` component — Push replaces the entire component, so omitting the schema would clear it.
+
+## Disaster recovery metadata
+
+When storing blobs, consider embedding the entity metadata in your backend's object metadata. This allows recovery if the engine's state is lost. The S3 plugin stores the full entity JSON as a base64-encoded S3 user metadata header:
+
+```typescript
+async put(id, data) {
+  const entity = await getEntity(id);
+  const headers: Record<string, string> = {};
+  if (entity) {
+    const encoded = btoa(JSON.stringify(entity));
+    if (encoded.length <= 2048) {
+      headers["x-amz-meta-hydris-entity"] = encoded;
+    }
+  }
+  // ... upload with headers
+}
+```
+
+Also update the entity's `artifact.location` after a successful upload so the system knows where the blob lives:
+
+```typescript
+await push([{
+  id,
+  artifact: { id, location: [{ url: "https://my-backend/blobs/" + id }] },
+}]);
+```
+
+## Backend selection
+
+The engine's Artifact Storage service has a `backend` config field:
+
+- **`auto`** (default) — uses the last registered plugin store, falls back to local disk
+- **`local`** — always uses local disk
+- **`<name>`** — uses the store registered with that name (e.g. `"s3"`, `"my-storage"`)
+
+When your plugin registers its store, it automatically appears as a selectable backend in the UI.
+
+## Development
+
+Load a plugin into a running engine for testing:
+
+```bash
+hydris plugin run plugins/my-storage/index.ts
+```
+
+This bundles the TypeScript, uploads it to the engine and prints logs. The plugin runs in-process with the engine. When you disconnect (Ctrl+C), the plugin is unloaded and the store is unregistered.
+
+## Reference implementation
+
+See `plugins/s3storage/` in the core repository for a complete S3/GCS/MinIO storage plugin.
+

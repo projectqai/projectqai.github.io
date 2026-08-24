@@ -1,0 +1,60 @@
+# A ship built from an AIS message.
+#
+# Note how little of this is maritime-specific: geo, bearing and kinematics are
+# the same components a drone uses. Only `transponder` carries the AIS payload.
+# An ADS-B aircraft is the same entity with transponder.adsb instead.
+#
+# push it with:  hydris ec apply vessel.yaml
+
+id: example.vessel.aurora
+label: AURORA
+
+geo:
+  latitude: 54.2210
+  longitude: 12.1440
+
+bearing:
+  azimuth: 212
+
+kinematics:
+  velocityEnu:
+    east: -3.1
+    north: -4.9
+
+transponder:
+  ais:
+    mmsi: 211234560
+    imo: 9312345
+    callsign: DHAU
+    vessel_name: AURORA
+
+# static hull data from the AIS class A report
+administrative:
+  flag: DE
+  owner: Example Shipping GmbH
+  length_m: 154.0
+  width_m: 23.5
+  tonnage_gt: 18700
+  year_built: 2011
+
+navigation:
+  mode: NavigationModeUnderway
+
+# voyage data. timestamps are RFC 3339 strings, always UTC
+mission:
+  destination: ROSTOCK
+  eta: "2035-06-01T08:30:00Z"
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      vehicle:
+        sea: {}
+
+symbol:
+  milStd2525C: SNSP------
+
+routing:
+  channels:
+    - {}

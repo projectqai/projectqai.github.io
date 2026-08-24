@@ -1,0 +1,311 @@
+# A team on foot, with the kit each person carries.
+#
+# Eight entities:
+#   example.team.alpha.camp          the base the team works from
+#   example.team.alpha.alice         the team leader
+#   example.team.alpha.bob           a team member
+#   example.team.alpha.alice.vitals  her vital signs monitor
+#   example.team.alpha.alice.wind    her wind sensor
+#   example.team.alpha.alice.radio   her radio
+#   example.team.alpha.chat.1        a message she sent
+#   example.team.alpha.chat.2        the answer
+#
+# A person is an entity like any other. A person carries devices, so the
+# devices attach to the person in the same way that the ship sensors attach to
+# the hull: `pose` for where the device sits, `assembly` for what it is part
+# of, and `device.parent` for the device tree.
+#
+# Bob carries the same kit. This file gives it to Alice only, to stay short.
+#
+# push it with:  hydris ec apply team.yaml
+
+---
+# The base. The team leader and the radios refer to it.
+id: example.team.alpha.camp
+label: Base Camp
+
+geo:
+  latitude: 54.1770
+  longitude: 12.0840
+  altitude: 5
+
+device:
+  class: camp
+  category: Ground
+  state: DeviceStateActive
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      infrastructure: {}
+
+symbol:
+  milStd2525C: SFGPU-----
+
+routing:
+  channels:
+    - {}
+
+---
+# The team leader.
+#
+# The mission component makes this a team rather than two separate people.
+# It names the members, the task and the destination. Put it on the leader.
+id: example.team.alpha.alice
+label: Alpha - Alice
+
+geo:
+  latitude: 54.1795
+  longitude: 12.0902
+  altitude: 12
+
+kinematics:
+  velocityEnu:
+    east: 0.9
+    north: 1.1
+    up: 0.1
+
+mission:
+  members:
+    - example.team.alpha.alice
+    - example.team.alpha.bob
+  description: Shore patrol, north perimeter
+  destination: North Mast
+
+device:
+  parent: example.team.alpha.camp
+  class: person
+  category: Ground
+  state: DeviceStateActive
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      person: {}
+
+symbol:
+  milStd2525C: SFGPUC----
+
+routing:
+  channels:
+    - {}
+
+---
+# A team member. Same shape, no mission component.
+id: example.team.alpha.bob
+label: Alpha - Bob
+
+geo:
+  latitude: 54.1791
+  longitude: 12.0897
+  altitude: 11
+
+kinematics:
+  velocityEnu:
+    east: 1.0
+    north: 0.8
+
+device:
+  parent: example.team.alpha.camp
+  class: person
+  category: Ground
+  state: DeviceStateActive
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      person: {}
+
+symbol:
+  milStd2525C: SFGPUC----
+
+routing:
+  channels:
+    - {}
+
+---
+# Vital signs from a chest strap.
+#
+# `pose` puts the device on the person, so it moves with her. `assembly` says
+# it is part of her kit. `device.parent` puts it under her in the device tree.
+# The three answer different questions, and a UI uses all three.
+id: example.team.alpha.alice.vitals
+label: Alice Vital Monitor
+
+assembly:
+  parent: example.team.alpha.alice
+
+device:
+  parent: example.team.alpha.alice
+  class: vitals
+  state: DeviceStateActive
+
+pose:
+  parent: example.team.alpha.alice
+  cartesian:
+    east_m: 0.1
+    north_m: 0
+    up_m: 0.4
+
+# an empty sensor component marks the entity as a sensor
+sensor: {}
+
+metric:
+  metrics:
+    - id: 1
+      kind: MetricKindHeartRate
+      unit: MetricUnitBeatsPerMinute
+      label: Heart Rate
+      double: 118
+      alerting: AlertLevelWarning
+      range:
+        min_double: 40
+        max_double: 200
+    - id: 2
+      kind: MetricKindOxygenSaturation
+      unit: MetricUnitPercent
+      label: SpO2
+      double: 94
+    - id: 3
+      kind: MetricKindBodyTemperature
+      unit: MetricUnitCelsius
+      label: Body Temperature
+      double: 37.1
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# A wind sensor on top of the backpack.
+id: example.team.alpha.alice.wind
+label: Alice Wind Sensor
+
+assembly:
+  parent: example.team.alpha.alice
+
+device:
+  parent: example.team.alpha.alice
+  class: weather
+  state: DeviceStateActive
+
+pose:
+  parent: example.team.alpha.alice
+  cartesian:
+    east_m: 0
+    north_m: 0
+    up_m: 0.3
+
+sensor: {}
+
+metric:
+  metrics:
+    - id: 1
+      kind: MetricKindWindSpeed
+      unit: MetricUnitMeterPerSecond
+      label: Wind Speed
+      double: 12.4
+    - id: 2
+      kind: MetricKindWindDirection
+      unit: MetricUnitDegree
+      label: Wind Direction
+      double: 285
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# The radio on her hip.
+#
+# `link.via` names the entity on the other end. That is how a client draws the
+# radio network, and how it explains a lost link.
+id: example.team.alpha.alice.radio
+label: Alice Radio
+
+assembly:
+  parent: example.team.alpha.alice
+
+device:
+  parent: example.team.alpha.alice
+  class: radio
+  state: DeviceStateActive
+
+pose:
+  parent: example.team.alpha.alice
+  cartesian:
+    east_m: 0.15
+    north_m: 0
+    up_m: -0.2
+
+link:
+  status: LinkStatusDegraded
+  via: example.team.alpha.camp
+  rssi_dbm: -97
+  snr_db: -3
+  link_quality_percent: 34
+
+power:
+  battery_charge_remaining: 0.41
+  voltage: 3.7
+
+symbol:
+  milStd2525C: SFGPE-----
+
+routing:
+  channels:
+    - {}
+
+---
+# A message.
+#
+# Chat is an entity, so it uses the same routing, priority and lifetime as
+# everything else. A bridge can carry it to TAK, to Meshtastic or to a radio.
+# `sender` and `to` are entity ids, not names.
+id: example.team.alpha.chat.1
+label: Alice
+
+chat:
+  sender: example.team.alpha.alice
+  message: Alpha at the north mast, wind is up
+
+priority: PriorityImmediate
+
+routing:
+  channels:
+    - {}
+
+---
+# The answer. `reply_to` links the two.
+# A client that has no threads shows this as a normal message.
+id: example.team.alpha.chat.2
+label: Bob
+
+chat:
+  sender: example.team.alpha.bob
+  to: example.team.alpha.alice
+  reply_to: example.team.alpha.chat.1
+  message: Copy, hold there. I am 60 m behind you
+
+priority: PriorityImmediate
+
+routing:
+  channels:
+    - {}

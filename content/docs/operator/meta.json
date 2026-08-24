@@ -1,0 +1,18 @@
+{
+  "title": "Operator Guide",
+  "pages": [
+    "index",
+    "command-menu",
+    "---Mission Workflow---",
+    "data-sources",
+    "mission-packs",
+    "tasking-assets",
+    "connecting-downstreams",
+    "---Reference---",
+    "plugins",
+    "cameras",
+    "layouts",
+    "map",
+    "offline-maps"
+  ]
+}

@@ -1,0 +1,292 @@
+# A radar, its plots, and the track that fuses them.
+#
+# Eight entities:
+#   example.radar.north               the radar
+#   example.radar.north.coverage      the area it can see
+#   example.det.radar.8812            a plot with a bearing and a range
+#   example.det.radar.8830            a plot as an offset in meters
+#   example.det.radar.4407            a plot as a position
+#   example.track.vessel1             the track built from two of the plots
+#   example.track.vessel1.history     where the track has been
+#   example.track.vessel1.prediction  where the track goes next
+#
+# The three plots show the three ways a driver can report a contact. All three
+# use the same detection component. Only the offset changes.
+#
+# No plot has a symbol. A detection reports what the sensor measured, not how
+# to draw it. `classification.taxonomy` says what it is.
+#
+# push it with:  hydris ec apply radar.yaml
+
+---
+# The radar.
+# The device component makes it an asset with a state. The symbol makes it
+# visible. Together they put it in the readiness panel.
+id: example.radar.north
+label: Surface Search Radar
+
+geo:
+  latitude: 54.1804
+  longitude: 12.0884
+  altitude: 9
+
+device:
+  class: radar
+  category: Sea
+  state: DeviceStateActive
+  unique_hardware_id: example.radar.sn-4417
+
+link:
+  status: LinkStatusConnected
+  avg_latency_ms: 8
+
+# What the radar can see.
+#
+# A camera declares a `fov` and a `range_max`, and the engine builds the cone.
+# A radar has no such fields, because no two radars have the same footprint.
+# So the sensor names shape entities that give it.
+#
+# `coverage` is a list. A radar with a mast in the way, or one that scans a
+# sector, names one shape for each part it can see.
+sensor:
+  coverage:
+    - example.radar.north.coverage
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 1.0
+      equipment:
+        sensor:
+          emplaced: {}
+          radar: {}
+
+symbol:
+  milStd2525C: SFGPESR---
+
+routing:
+  channels:
+    - {}
+
+---
+# The coverage.
+#
+# A ring, not a disc. `inner_radius_m` cuts out the blind zone below the
+# minimum range of the radar, so the shape states both limits at once.
+#
+# The geometry is a `local_shape`, in meters from the radar, so the coverage
+# follows the radar. Move the radar, and the ring moves with it. The engine
+# converts the ring to WGS84 for clients that want it in world coordinates.
+id: example.radar.north.coverage
+label: Radar Coverage
+
+local_shape:
+  relative_to: example.radar.north
+  geometry:
+    circle:
+      center: { east_m: 0, north_m: 0 }
+      radius_m: 3200
+      inner_radius_m: 150
+  extrusion:
+    fill:
+      color: "#38bdf8"
+      opacity: 0.06
+
+routing:
+  channels:
+    - {}
+
+---
+# PLOT 1: a bearing and a range.
+#
+# This is the usual radar plot. The engine calculates an absolute position
+# from it. It draws a line of bearing, not an ellipse. The line runs to
+# range + 2 sigma, so its length shows the quality of the range measurement.
+id: example.det.radar.8812
+label: Radar Plot 8812
+
+controller:
+  id: example.tracker.kalman
+
+priority: PriorityImmediate
+
+detection:
+  detectorEntityId: example.radar.north
+  confidence: 0.71
+
+pose:
+  parent: example.radar.north
+  polar:
+    azimuth: 21.5
+    range: 2600
+    # 1-sigma errors. the engine calculates the covariance from them
+    azimuth_error_deg: 0.8
+    range_error_m: 40
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.6
+      vehicle:
+        sea: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# PLOT 2: an offset in meters.
+#
+# Some drivers report east and north instead of angles. A cartesian offset
+# holds no direction, so the engine draws an uncertainty ellipse.
+# The covariance is in meters squared: 300 m east error, 200 m north error.
+#
+# This plot has no classification. That is normal for a bare radar return.
+# Leave it out. To classify the contact is the job of the fuser.
+id: example.det.radar.8830
+label: Radar Plot 8830
+
+controller:
+  id: example.tracker.kalman
+
+detection:
+  detectorEntityId: example.radar.north
+  confidence: 0.64
+
+pose:
+  parent: example.radar.north
+  cartesian:
+    east_m: 1450
+    north_m: 2100
+    covariance:
+      mxx: 90000
+      myy: 40000
+
+routing:
+  channels:
+    - {}
+
+---
+# PLOT 3: a position.
+#
+# Some hardware calculates the position itself, as do ADS-B and AIS feeds.
+# Then the entity has no pose. Push the position, and put the accuracy in its
+# covariance. The engine still draws the ellipse. An isotropic covariance
+# becomes a circle.
+id: example.det.radar.4407
+label: Radar Plot 4407
+
+controller:
+  id: example.radar.north
+
+detection:
+  detectorEntityId: example.radar.north
+  confidence: 0.55
+
+geo:
+  latitude: 54.1997
+  longitude: 12.0721
+  # meters squared in the local ENU frame: xx=east, yy=north, xy=correlation
+  covariance:
+    mxx: 62500
+    myy: 22500
+    mxy: 9000
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.35
+      vehicle:
+        sea: {}
+
+routing:
+  channels:
+    - {}
+
+---
+# The track.
+#
+# A plot is one measurement. A track is the conclusion of a fuser. It keeps
+# `evidence` pointers to the plots it used, so an operator can ask why the
+# contact exists.
+#
+# A track is a picture object, so it does have a symbol.
+id: example.track.vessel1
+label: TRK-0413
+
+track:
+  tracker: example.tracker.kalman
+  confidence: 0.93
+
+  evidence:
+    - example.det.radar.8812
+    - example.det.radar.8830
+
+  # the two shape entities below
+  history: example.track.vessel1.history
+  prediction: example.track.vessel1.prediction
+
+geo:
+  latitude: 54.2015
+  longitude: 12.1103
+  # position error in meters squared, local ENU frame. drawn as an ellipse
+  covariance:
+    mxx: 900
+    myy: 1600
+    mxy: 120
+
+bearing:
+  azimuth: 247
+
+kinematics:
+  velocityEnu:
+    east: -4.2
+    north: -1.8
+    up: 0
+
+classification:
+  taxonomy:
+    - confidence:
+        confidence: 0.8
+      vehicle:
+        sea: {}
+
+symbol:
+  milStd2525C: SNSP------
+
+routing:
+  channels:
+    - {}
+
+---
+# Where the track has been.
+# History is a separate entity, not a field. A client that needs only the
+# current position never receives it.
+id: example.track.vessel1.history
+label: TRK-0413 history
+
+shape:
+  geometry:
+    planar:
+      line:
+        points:
+          - { longitude: 12.1310, latitude: 54.2120 }
+          - { longitude: 12.1245, latitude: 54.2081 }
+          - { longitude: 12.1174, latitude: 54.2046 }
+          - { longitude: 12.1103, latitude: 54.2015 }
+      line_style: LineStyleSolid
+
+---
+# Where the track goes next.
+id: example.track.vessel1.prediction
+label: TRK-0413 prediction
+
+shape:
+  geometry:
+    planar:
+      line:
+        points:
+          - { longitude: 12.1103, latitude: 54.2015 }
+          - { longitude: 12.1032, latitude: 54.1984 }
+          - { longitude: 12.0961, latitude: 54.1953 }
+      line_style: LineStyleDashed

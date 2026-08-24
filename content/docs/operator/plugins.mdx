@@ -1,0 +1,52 @@
+---
+title: Plugins
+description: Extend Hydris with capabilities from the open-source catalog, your own registry, or partner-delivered plugins
+---
+
+Plugins are capabilities you switch on per node—feeds that enrich the picture, logic that tasks your assets, integrations for extra sensors. There's nothing to install by hand: browse, enable, and configure everything from the UI, and your plugin selection travels with your [mission pack](/docs/operator/mission-packs).
+
+## Managing Plugins
+
+Press `Ctrl+K` (or `⌘+K` on macOS) and select **Manage plugins**. This opens the configuration tree focused on your plugins, where each plugin has an **enabled** toggle and its own settings.
+
+The built-in catalog covers a range of capabilities, for example:
+
+- **Enrichment feeds** — **HexDB** adds aircraft photos and registration to ADS-B tracks, and **ADS-B DB** adds registration, owner, type, and country from a bundled offline database; **Open-Meteo** brings in weather and air quality; **NINA** surfaces German emergency warnings; **Blitzortung** shows live lightning strikes.
+- **Asset logic** — **Autocue** automatically slews PTZ cameras to follow tracked entities.
+- **Sensors** — **Airthings** integrates BLE air-quality monitors.
+
+Enable what the mission needs and leave the rest off—each node runs only the plugins you've switched on.
+
+## Where Plugins Come From
+
+- **Open source** — the built-in catalog ships with Hydris, and the plugins in it are open source under Apache 2.0. Browse and enable them directly from **Manage plugins**.
+- **Your own** — run plugins your team builds or vets, without anything leaving your infrastructure. Point Hydris at a single plugin by OCI image reference, host your own **plugin feed** to act as a private catalog, and store **registry credentials** so images can be pulled from your private OCI registry.
+- **Q Partner Program** — selected commercial capabilities from our partner network of best-in-class providers, delivered as plugins and co-built for interoperability with your mission systems. [Contact us](mailto:info@project-q.ai) to learn what's available.
+
+## Running Your Own Plugins
+
+Under **Custom Plugins** in the configuration tree you can add:
+
+| Type | What it does | Key settings |
+| --- | --- | --- |
+| **Custom Plugin** | Runs a single plugin from an OCI image reference or a local file | Image reference or path, enabled |
+| **Plugin Feed** | Subscribes to a remote plugin index and runs every compatible plugin it lists—your private catalog | Feed URL, optional username and token |
+| **Registry Credentials** | Stores credentials for an OCI registry so private plugin images can be pulled | Registry hostname, username, password |
+
+When a **Plugin Feed** includes a username and token, Hydris creates the matching **Registry Credentials** for each registry it pulls from, so you don't have to add those by hand.
+
+Want to build your own? The [developer guide](/docs/developer/plugins) walks through writing, building, and publishing a plugin.
+
+## Related
+
+<Cards>
+  <Card title="Build a Mission" href="/docs/operator/mission-packs">
+    Bundle your plugin selection and configuration into a shareable mission set
+  </Card>
+  <Card title="Command Menu" href="/docs/operator/command-menu">
+    The Ctrl+K entrypoint where plugins are managed
+  </Card>
+  <Card title="Developing Plugins" href="/docs/developer/plugins">
+    Build, publish, and run your own TypeScript plugins
+  </Card>
+</Cards>

@@ -1,0 +1,60 @@
+---
+title: Getting Started
+description: Configure and operate Hydris
+---
+
+If you haven't installed Hydris yet, follow the [installation instructions](/docs#installing) first.
+
+## Quick Start
+
+Hydris opens with a map in the center, entity list on the left, and entity details on the right. The built-in **Playground** mission pulls public demo data with zero hardware and zero accounts—live data on the map in under a minute:
+
+1. Press `Ctrl+K` (or `⌘+K` on macOS) and select **Configuration**
+
+   <div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+     <img src="/hydris-command-menu.png" alt="The Hydris command menu opened over the map, with Load mission pack and Manage plugins at the top" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+   </div>
+
+2. Open **Mission → Playground**
+3. Toggle **Enable ADS-B** on
+4. Click **Apply Configuration**, then close the menu with `Esc`
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-configuration.png" alt="Hydris configuration menu showing missions and integrations" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+Within seconds, live aircraft appear on the map. Click any of them to open the entity details panel.
+
+<div style={{ border: '2px solid #555', borderRadius: '8px', overflow: 'hidden', lineHeight: 0, margin: 0, padding: 0 }}>
+  <img src="/hydris-adsb-entities.png" alt="Map showing ADS-B aircraft entities" style={{ display: 'block', width: '100%', margin: 0, padding: 0 }} />
+</div>
+
+That's demo data from a public feed—connecting your own [systems](/docs/operator/data-sources) works the same way.
+
+## The Workflow
+
+Your primary entrypoint is the [command menu](/docs/operator/command-menu)—press `Ctrl+K` (or `⌘+K` on macOS) from anywhere to run commands, open configuration, or search for any asset, camera, or track and fly straight to it on the map.
+
+Received a mission pack? Select **Load mission pack** and you're operational. Building from scratch, every mission follows the same arc:
+
+1. **[Connect your systems](/docs/operator/data-sources)** — bring sensors, assets, and feeds into the picture
+2. **[Build a mission](/docs/operator/mission-packs)** — compose plugins, sources, and layouts into a shareable mission pack
+3. **[Task your assets](/docs/operator/tasking-assets)** — aim cameras, lock onto tracks, and act on what you see
+4. **[Share the picture](/docs/operator/connecting-downstreams)** — feed downstream situational awareness systems like ATAK
+
+## Next Steps
+
+<Cards>
+  <Card title="Plugins" href="/docs/operator/plugins">
+    Switch on capabilities from the catalog, your own registry, or partners
+  </Card>
+  <Card title="Cameras" href="/docs/operator/cameras">
+    Place cameras on the map and configure their coverage cones
+  </Card>
+  <Card title="Layouts" href="/docs/operator/layouts">
+    Customize the interface with layout presets and widgets
+  </Card>
+  <Card title="Developer Guide" href="/docs/developer">
+    Build custom integrations with the Hydris API
+  </Card>
+</Cards>

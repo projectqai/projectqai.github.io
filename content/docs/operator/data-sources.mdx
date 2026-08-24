@@ -1,0 +1,58 @@
+---
+title: Connect Your Systems
+description: Get live data on the map—aircraft, ships, drones, cameras, and more
+---
+
+Every data source—built-in feed or plugin—is configured in one place: the Configuration tree. Connect a source and its data appears live on the map as entities, ready to inspect, correlate, and share.
+
+Never added a source before? The [Getting Started](/docs/operator) quick start puts live demo data on the map in 60 seconds.
+
+## How Every Source Works
+
+All sources follow one pattern:
+
+1. Press `Ctrl+K` (or `⌘+K` on macOS) and select **Configuration**. The tree groups sources by category—**Feeds**, **Network**, **Vehicles**, **Cameras**, **Plugins**—and the sidebar search filters it.
+2. Select the source and click **Add**, then pick the connection type—each shows a short description of what it does—and fill in the settings.
+3. Click **Apply Configuration**. Changes take effect live: a **Config applied** toast confirms the source picked them up, and it shows an **Active** badge.
+
+Add as many instances of a source as you need—several AIS receivers, multiple ADS-B pollers over different regions.
+
+Sources delivered by [plugins](/docs/operator/plugins) are even simpler: they're pre-listed under **Plugins**—just flip **Enabled** on.
+
+## What Are You Integrating?
+
+| I want… | Source | Where | Guide |
+| --- | --- | --- | --- |
+| Aircraft | ADS-B | Feeds | [ADS-B](/docs/integration/adsb) |
+| Ships & vessels | AIS (NMEA) | Feeds | [AIS](/docs/integration/ais) |
+| Radar tracks | ASTERIX CAT 062 | Feeds | [ASTERIX](/docs/integration/asterix) |
+| Satellites | SpaceTrack | Feeds | [SpaceTrack](/docs/integration/spacetrack) |
+| Drones & unmanned vehicles | MAVLink | Vehicles | [MAVLink](/docs/integration/mavlink) |
+| RC telemetry | EdgeTX | Vehicles | [EdgeTX](/docs/integration/edgetx) |
+| The TAK picture (ATAK, WinTAK) | TAK | Network | [ATAK / TAK](/docs/integration/atak) |
+| Mesh radio positions | Meshtastic | Network | [Meshtastic](/docs/integration/meshtastic) |
+| Camera feeds & PTZ control | Reolink / Axis | Cameras | [Cameras](/docs/operator/cameras) |
+| Weather & air quality | Open-Meteo | Plugins | [Plugins](/docs/operator/plugins) |
+| Lightning strikes | Blitzortung | Plugins | [Plugins](/docs/operator/plugins) |
+| Emergency warnings (Germany) | NINA | Plugins | [Plugins](/docs/operator/plugins) |
+| Aircraft enrichment (photos, registration) | HexDB, ADS-B DB | Plugins | [Plugins](/docs/operator/plugins) |
+
+## Verify It's Flowing
+
+- The source's row shows an **Active** badge (green). **Failed** or **Conflict** (red) means something needs attention—check its settings.
+- Select the source and open its **Metrics** tab for live throughput—ADS-B, for example, shows aircraft tracked and entities pushed.
+- Entities land on the map and in the entity list within seconds of applying.
+
+## Related
+
+<Cards>
+  <Card title="Plugins" href="/docs/operator/plugins">
+    Enrichment feeds and extra capabilities, switched on per node
+  </Card>
+  <Card title="Command Menu" href="/docs/operator/command-menu">
+    The Ctrl+K entrypoint where Configuration lives
+  </Card>
+  <Card title="Build a Mission" href="/docs/operator/mission-packs">
+    Your configured sources travel with your mission pack
+  </Card>
+</Cards>
